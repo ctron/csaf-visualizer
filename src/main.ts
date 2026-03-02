@@ -234,16 +234,14 @@ function renderProductDetailBody(product: FullProductName, nodeType?: string): s
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
   let html = `
-    <div class="mb-3 d-flex align-items-center gap-2">
-      <div>
-        <div class="small text-secondary mb-1">Product ID</div>
-        <code class="text-warning">${esc(product.product_id)}</code>
-      </div>
-      ${nodeType ? `<span class="badge bg-secondary ms-auto">${esc(nodeType.replace(/_/g, ' '))}</span>` : ''}
+    <div class="mb-3">
+      ${nodeType ? `<span class="badge bg-secondary mb-2">${esc(nodeType.replace(/_/g, ' '))}</span>` : ''}
+      ${product.product_id ? `<div class="small text-secondary mb-1">Product ID</div><code class="text-warning text-break">${esc(product.product_id)}</code>` : '<span class="text-secondary small fst-italic">Branch node — no product ID</span>'}
     </div>
   `
 
   if (!pih) {
+    if (!product.product_id) return html
     html += '<p class="text-secondary small">No product identification helper available.</p>'
     return html
   }

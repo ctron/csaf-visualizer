@@ -1,25 +1,35 @@
 import * as d3 from 'd3'
-import type { ParsedModel, FullProductName, BranchAncestor } from '../types'
+import type { ParsedModel, FullProductName } from '../types'
 import { showProductDetail } from '../main'
 import { pihEntries } from '../pih'
-import { labelAnchor, labelContentHeight, renderNodeLabels } from '../node-labels'
+import { labelAnchor, renderNodeLabels } from '../node-labels'
 
 interface RelTreeState {
   svg: d3.Selection<SVGSVGElement, unknown, null, undefined>
   zoom: d3.ZoomBehavior<SVGSVGElement, unknown>
-  nodeEls: d3.Selection<SVGGElement, d3.HierarchyPointNode<RelTreeNode>, SVGGElement, unknown>
   containerEl: HTMLElement
+  highlightFn: (productId: string) => void
 }
 
 let relTreeState: RelTreeState | null = null
 
-interface RelTreeNode {
+interface LayerNode {
+  id: string
+  col: number
   name: string
   productId?: string
   product?: FullProductName
+  branchCategory?: string
   relationCategory?: string
-  nodeKind: 'ancestor' | 'platform' | 'combined' | 'component'
-  children?: RelTreeNode[]
+  kind: 'ancestor' | 'relates_to' | 'full_product_name' | 'product_reference'
+  x: number
+  y: number
+}
+
+interface LayerEdge {
+  sourceId: string
+  targetId: string
+  relationCategory?: string
 }
 
 const RELATIONSHIP_COLORS: Record<string, string> = {
@@ -32,32 +42,31 @@ const RELATIONSHIP_COLORS: Record<string, string> = {
 
 const KIND_COLORS: Record<string, string> = {
   ancestor: '#6c757d',
-  platform: '#5bc0de',
-  combined: '#f0ad4e',
-  component: '#5cb85c',
+  relates_to: '#5bc0de',
+  full_product_name: '#f0ad4e',
+  product_reference: '#5cb85c',
 }
 
 function relColor(cat?: string): string {
   return cat ? (RELATIONSHIP_COLORS[cat] ?? '#adb5bd') : '#adb5bd'
 }
 
-function getOrCreateAncestorNode(
-  parent: RelTreeNode,
-  ancestors: BranchAncestor[],
-  depth: number,
-): RelTreeNode {
-  if (depth >= ancestors.length) return parent
+function nodeRadius(kind: string): number {
+  if (kind === 'ancestor') return 5
+  if (kind === 'relates_to') return 8
+  return 6
+}
 
-  const ancestor = ancestors[depth]
-  parent.children = parent.children ?? []
-  let child = parent.children.find(
-    c => c.nodeKind === 'ancestor' && c.name === ancestor.name
-  )
-  if (!child) {
-    child = { name: ancestor.name, nodeKind: 'ancestor', children: [] }
-    parent.children.push(child)
+function connectedIds(startId: string, nodeChains: Map<string, Set<number>>): Set<string> {
+  const chains = nodeChains.get(startId)
+  if (!chains) return new Set([startId])
+  const result = new Set<string>()
+  for (const [nodeId, nodeChainSet] of nodeChains) {
+    for (const c of chains) {
+      if (nodeChainSet.has(c)) { result.add(nodeId); break }
+    }
   }
-  return getOrCreateAncestorNode(child, ancestors, depth + 1)
+  return result
 }
 
 export function renderRelationshipTree(container: HTMLElement, model: ParsedModel): void {
@@ -69,7 +78,27 @@ export function renderRelationshipTree(container: HTMLElement, model: ParsedMode
     return
   }
 
-  const virtualRoot: RelTreeNode = { name: '__root__', nodeKind: 'ancestor', children: [] }
+  const allNodes = new Map<string, LayerNode>()
+  const allEdges: LayerEdge[] = []
+  const nodeChains = new Map<string, Set<number>>()
+  let chainCounter = 0
+
+  function ensureNode(node: LayerNode): void {
+    if (!allNodes.has(node.id)) allNodes.set(node.id, { ...node, x: 0, y: 0 })
+  }
+
+  function addEdge(sourceId: string, targetId: string, relationCategory?: string): void {
+    if (!allEdges.some(e => e.sourceId === sourceId && e.targetId === targetId)) {
+      allEdges.push({ sourceId, targetId, relationCategory })
+    }
+  }
+
+  function tagChain(chainId: number, ...ids: string[]): void {
+    for (const id of ids) {
+      if (!nodeChains.has(id)) nodeChains.set(id, new Set())
+      nodeChains.get(id)!.add(chainId)
+    }
+  }
 
   for (const rel of rels) {
     const platformId = rel.relates_to_product_reference
@@ -79,50 +108,151 @@ export function renderRelationshipTree(container: HTMLElement, model: ParsedMode
     const platformProduct = model.allProducts.get(platformId)
     const componentProduct = model.allProducts.get(componentId)
     const platformAncestors = model.productAncestors.get(platformId) ?? []
+    const platformBranchCategory = model.productBranchCategory.get(platformId)
+    const componentBranchCategory = model.productBranchCategory.get(componentId)
+    const componentAncestors = model.productAncestors.get(componentId) ?? []
 
-    const ancestorParent = getOrCreateAncestorNode(virtualRoot, platformAncestors, 0)
+    const platformNodeId = '__rel__' + platformId
+    const combinedId = '__combined__' + combinedProduct.product_id
+    const componentNodeId = '__comp__' + componentId
+    const chainId = chainCounter++
 
-    ancestorParent.children = ancestorParent.children ?? []
-    let platformNode = ancestorParent.children.find(
-      c => c.nodeKind === 'platform' && c.productId === platformId
-    )
-    if (!platformNode) {
-      platformNode = {
-        name: platformProduct?.name ?? platformId,
-        productId: platformId,
-        product: platformProduct,
-        nodeKind: 'platform',
-        children: [],
-      }
-      ancestorParent.children.push(platformNode)
+    const nPlat = platformAncestors.length
+    let prevId = ''
+    for (let i = 0; i < nPlat; i++) {
+      const anc = platformAncestors[i]
+      const ancId = '__plat_anc__' + platformAncestors.slice(0, i + 1).map(a => a.name).join('\0')
+      const ancCol = -(nPlat - i + 1)
+      ensureNode({ id: ancId, col: ancCol, kind: 'ancestor', name: anc.name, branchCategory: anc.category, x: 0, y: 0 })
+      tagChain(chainId, ancId)
+      if (prevId) addEdge(prevId, ancId)
+      prevId = ancId
     }
 
-    const combinedNode: RelTreeNode = {
+    ensureNode({
+      id: platformNodeId, col: -1, kind: 'relates_to',
+      name: platformProduct?.name ?? platformId,
+      productId: platformId, product: platformProduct,
+      branchCategory: platformBranchCategory, x: 0, y: 0,
+    })
+    tagChain(chainId, platformNodeId)
+    if (prevId) addEdge(prevId, platformNodeId)
+
+    ensureNode({
+      id: combinedId, col: 0, kind: 'full_product_name',
       name: combinedProduct.name,
-      productId: combinedProduct.product_id,
-      product: combinedProduct,
-      nodeKind: 'combined',
-      relationCategory: rel.category,
-      children: [
-        {
-          name: componentProduct?.name ?? componentId,
-          productId: componentId,
-          product: componentProduct,
-          nodeKind: 'component',
-          relationCategory: rel.category,
-        },
-      ],
-    }
+      productId: combinedProduct.product_id, product: combinedProduct,
+      relationCategory: rel.category, x: 0, y: 0,
+    })
+    tagChain(chainId, combinedId)
+    addEdge(platformNodeId, combinedId)
 
-    platformNode.children!.push(combinedNode)
+    ensureNode({
+      id: componentNodeId, col: 1, kind: 'product_reference',
+      name: componentProduct?.name ?? componentId,
+      productId: componentId, product: componentProduct,
+      branchCategory: componentBranchCategory,
+      relationCategory: rel.category, x: 0, y: 0,
+    })
+    tagChain(chainId, componentNodeId)
+    addEdge(combinedId, componentNodeId, rel.category)
+
+    for (let i = 0; i < componentAncestors.length; i++) {
+      const anc = componentAncestors[i]
+      const ancId = '__comp_anc__' + componentAncestors.slice(0, i + 1).map(a => a.name).join('\0')
+      const ancCol = 2 + i
+      ensureNode({ id: ancId, col: ancCol, kind: 'ancestor', name: anc.name, branchCategory: anc.category, x: 0, y: 0 })
+      tagChain(chainId, ancId)
+      const parentId = i === 0 ? componentNodeId : '__comp_anc__' + componentAncestors.slice(0, i).map(a => a.name).join('\0')
+      addEdge(parentId, ancId)
+    }
   }
+
+  const { minCol, maxCol, svgW, svgH } = computeLayout(allNodes)
 
   relTreeState = null
 
   const legend = buildLegend()
   container.appendChild(legend)
 
-  drawRelTree(container, virtualRoot)
+  drawCustomLayout(container, allNodes, allEdges, nodeChains, minCol, maxCol, svgW, svgH)
+}
+
+function computeLayout(
+  visibleNodes: Map<string, LayerNode>,
+): { minCol: number; maxCol: number; svgW: number; svgH: number } {
+  const H_GAP = 60
+  const ROW_HEIGHT = 56
+  const PADDING = 40
+
+  const colMap = new Map<number, LayerNode[]>()
+  for (const node of visibleNodes.values()) {
+    const col = colMap.get(node.col) ?? []
+    if (!col.includes(node)) col.push(node)
+    colMap.set(node.col, col)
+  }
+
+  const cols = Array.from(colMap.keys()).sort((a, b) => a - b)
+  const minCol = cols[0] ?? 0
+  const maxCol = cols[cols.length - 1] ?? 0
+
+  const colWidths = measureColWidths(colMap)
+
+  const colX = new Map<number, number>()
+  let x = PADDING
+  for (const col of cols) {
+    colX.set(col, x)
+    x += colWidths.get(col)! + H_GAP
+  }
+  const totalW = x - H_GAP + PADDING
+
+  const maxRows = Math.max(1, ...Array.from(colMap.values()).map(n => n.length))
+  const totalH = maxRows * ROW_HEIGHT
+
+  for (const col of cols) {
+    const nodes = colMap.get(col)!
+    const cx = colX.get(col)!
+    const colH = nodes.length * ROW_HEIGHT
+    const offsetY = (totalH - colH) / 2 + PADDING
+    nodes.forEach((node, i) => {
+      node.x = cx
+      node.y = i * ROW_HEIGHT + offsetY
+    })
+  }
+
+  return { minCol, maxCol, svgW: totalW, svgH: totalH + PADDING * 2 }
+}
+
+function measureColWidths(colMap: Map<number, LayerNode[]>): Map<number, number> {
+  const measureSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  measureSvg.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none'
+  document.body.appendChild(measureSvg)
+
+  const colWidths = new Map<number, number>()
+
+  for (const [col, nodes] of colMap) {
+    let maxW = 0
+    for (const node of nodes) {
+      const kind = node.kind
+      const fontSize = kind === 'ancestor' ? '11px' : '12px'
+      const fontWeight = kind === 'relates_to' ? '600' : '400'
+      const texts = [node.name]
+      if (node.productId && kind !== 'ancestor') texts.push(node.productId)
+      if (kind === 'full_product_name' && node.relationCategory) texts.push(node.relationCategory.replace(/_/g, ' '))
+      for (const t of texts) {
+        const el = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+        el.style.fontSize = fontSize
+        el.style.fontWeight = fontWeight
+        el.textContent = t
+        measureSvg.appendChild(el)
+        maxW = Math.max(maxW, el.getBBox().width)
+      }
+    }
+    colWidths.set(col, Math.max(maxW, 80))
+  }
+
+  document.body.removeChild(measureSvg)
+  return colWidths
 }
 
 function buildLegend(): HTMLElement {
@@ -131,9 +261,9 @@ function buildLegend(): HTMLElement {
 
   const kindEntries: [string, string][] = [
     [KIND_COLORS.ancestor, 'Branch ancestor'],
-    [KIND_COLORS.platform, 'Platform / Host'],
-    [KIND_COLORS.combined, 'Combined product (relationship)'],
-    [KIND_COLORS.component, 'Component'],
+    [KIND_COLORS.relates_to, 'Platform (relates_to)'],
+    [KIND_COLORS.full_product_name, 'Combined product (full_product_name)'],
+    [KIND_COLORS.product_reference, 'Component (product_reference)'],
   ]
   for (const [color, label] of kindEntries) {
     const item = document.createElement('span')
@@ -156,242 +286,164 @@ function buildLegend(): HTMLElement {
 
   const hint = document.createElement('span')
   hint.className = 'ms-auto small text-secondary'
-  hint.textContent = 'Drag to pan · Scroll to zoom · Click nodes for details'
+  hint.textContent = 'Hover to highlight path · Click label for details · Drag to pan · Scroll to zoom'
   div.appendChild(hint)
 
   return div
 }
 
-const REL_BASE_SLOT = 48
-
-function relContentHeight(node: { data: RelTreeNode }): number {
-  const kind = node.data.nodeKind
-  const isLeaf = kind === 'component'
-  const pih = node.data.product?.product_identification_helper
-  const pihCount = pih ? pihEntries(pih).length : 0
-  const extraLines = kind === 'combined' ? 1 : 0
-  return labelContentHeight({
-    hasProductId: !!node.data.productId && kind !== 'ancestor',
-    extraLines,
-    pihCount,
-  }) + (isLeaf ? 0 : 4)
-}
-
-function measureDepthWidths(hierarchy: d3.HierarchyNode<RelTreeNode>): Map<number, number> {
-  const measureSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  measureSvg.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none'
-  document.body.appendChild(measureSvg)
-
-  const depthMaxWidth = new Map<number, number>()
-
-  hierarchy.each(n => {
-    if (n.data.name === '__root__') return
-    const kind = n.data.nodeKind
-    const fontSize = kind === 'ancestor' ? '11px' : '12px'
-    const fontWeight = kind === 'platform' ? '600' : '400'
-
-    const texts = [n.data.name]
-    if (n.data.productId && kind !== 'ancestor') texts.push(n.data.productId)
-    if (kind === 'combined' && n.data.relationCategory) texts.push(n.data.relationCategory.replace(/_/g, ' '))
-
-    let maxW = 0
-    for (const t of texts) {
-      const el = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-      el.style.fontSize = fontSize
-      el.style.fontWeight = fontWeight
-      el.textContent = t
-      measureSvg.appendChild(el)
-      maxW = Math.max(maxW, el.getBBox().width)
-    }
-
-    const cur = depthMaxWidth.get(n.depth) ?? 0
-    if (maxW > cur) depthMaxWidth.set(n.depth, maxW)
-  })
-
-  document.body.removeChild(measureSvg)
-  return depthMaxWidth
-}
-
-function drawRelTree(container: HTMLElement, root: RelTreeNode): void {
-  const hGap = 60
-  const vGap = 8
-
-  const hierarchy = d3.hierarchy(root)
-
-  const depthMaxWidth = measureDepthWidths(hierarchy)
-
-  const depthX = new Map<number, number>()
-  let x = 0
-  const maxDepth = Math.max(...depthMaxWidth.keys())
-  for (let d = 0; d <= maxDepth; d++) {
-    depthX.set(d, x)
-    x += (depthMaxWidth.get(d) ?? 200) + hGap
-  }
-
-  const treeLayout = d3.tree<RelTreeNode>()
-    .nodeSize([REL_BASE_SLOT + vGap, 260])
-    .separation((a, b) => {
-      const aH = relContentHeight(a)
-      const bH = relContentHeight(b)
-      const needed = (aH + bH) / 2 + vGap
-      return Math.max(1, needed / (REL_BASE_SLOT + vGap))
-    })
-  const pointRoot = treeLayout(hierarchy)
-
-  pointRoot.each(n => { n.y = depthX.get(n.depth) ?? n.y })
-
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-  pointRoot.each(node => {
-    if (node.x < minX) minX = node.x
-    if (node.x > maxX) maxX = node.x
-    if (node.y < minY) minY = node.y
-    if (node.y > maxY) maxY = node.y
-  })
-
-  const padding = 24
-  const lastDepthWidth = depthMaxWidth.get(maxDepth) ?? 200
-  const svgWidth = maxY - minY + lastDepthWidth + padding * 2
-  const svgHeight = maxX - minX + REL_BASE_SLOT + padding * 2
-
-  const width = container.clientWidth || 800
-
+function drawCustomLayout(
+  container: HTMLElement,
+  allNodes: Map<string, LayerNode>,
+  allEdges: LayerEdge[],
+  nodeChains: Map<string, Set<number>>,
+  minCol: number,
+  maxCol: number,
+  svgW: number,
+  svgH: number,
+): void {
   const svg = d3.select(container)
     .append('svg')
     .attr('width', '100%')
     .attr('height', '100%')
-    .style('min-width', `${svgWidth}px`)
-    .style('min-height', `${svgHeight}px`)
-
-  const g = svg.append('g')
-
-  const initialX = padding - minY + (width - svgWidth) / 2
-  const initialY = padding - minX
-  const initialTransform = d3.zoomIdentity.translate(initialX, initialY)
+    .style('min-width', `${svgW}px`)
+    .style('min-height', `${svgH}px`)
 
   const zoom = d3.zoom<SVGSVGElement, unknown>()
     .scaleExtent([0.1, 4])
     .on('zoom', e => g.attr('transform', e.transform.toString()))
 
-  svg.call(zoom)
-  svg.call(zoom.transform, initialTransform)
+  svg.call(zoom).on('dblclick.zoom', null)
 
-  const linkGen = d3.linkHorizontal<d3.HierarchyPointLink<RelTreeNode>, d3.HierarchyPointNode<RelTreeNode>>()
-    .x(n => n.y)
-    .y(n => n.x)
+  const g = svg.append('g')
 
-  g.selectAll<SVGPathElement, d3.HierarchyPointLink<RelTreeNode>>('path.link')
-    .data(pointRoot.links().filter(l => l.source.data.name !== '__root__'))
+  const cw = container.clientWidth || 800
+  svg.call(zoom.transform, d3.zoomIdentity.translate((cw - svgW) / 2, 0))
+
+  const linkG = g.append('g')
+  const nodeG = g.append('g')
+
+  const link = d3.linkHorizontal<LayerEdge, LayerNode>()
+    .source(e => allNodes.get(e.sourceId)!)
+    .target(e => allNodes.get(e.targetId)!)
+    .x(n => n.x)
+    .y(n => n.y)
+
+  linkG.selectAll<SVGPathElement, LayerEdge>('path')
+    .data(allEdges)
     .enter()
     .append('path')
-    .attr('class', 'link')
+    .merge(linkG.selectAll<SVGPathElement, LayerEdge>('path'))
     .attr('fill', 'none')
-    .attr('stroke', d => {
-      if (d.target.data.nodeKind === 'ancestor') return '#495057'
-      return relColor(d.target.data.relationCategory)
+    .attr('stroke', e => {
+      const tgt = allNodes.get(e.targetId)
+      if (!tgt) return '#6c757d'
+      return tgt.kind === 'product_reference' ? relColor(e.relationCategory) : (tgt.kind === 'ancestor' ? '#495057' : '#6c757d')
     })
     .attr('stroke-width', 1.5)
-    .attr('stroke-dasharray', d => d.target.data.nodeKind === 'component' ? '5,3' : 'none')
-    .attr('d', linkGen)
+    .attr('stroke-dasharray', e => allNodes.get(e.targetId)?.kind === 'product_reference' ? '5,3' : 'none')
+    .attr('d', link)
 
-  const visibleNodes = pointRoot.descendants().filter(n => n.data.name !== '__root__')
+  const nodeData = Array.from(allNodes.values())
 
-  const node = g.selectAll<SVGGElement, d3.HierarchyPointNode<RelTreeNode>>('g.node')
-    .data(visibleNodes)
+  const nodeEls = nodeG.selectAll<SVGGElement, LayerNode>('g.node')
+    .data(nodeData, d => d.id)
     .enter()
     .append('g')
     .attr('class', 'node')
-    .attr('transform', n => `translate(${n.y},${n.x})`)
-    .style('cursor', n => n.data.productId ? 'pointer' : 'default')
-    .on('click', (_evt, n) => {
-      const product = n.data.product ?? (n.data.productId ? { name: n.data.name, product_id: n.data.productId } : null)
-      if (product) showProductDetail(product, n.data.nodeKind)
-    })
+    .attr('transform', d => `translate(${d.x},${d.y})`)
+    .style('pointer-events', 'all')
 
-  node.append('circle')
-    .attr('r', n => {
-      if (n.data.nodeKind === 'ancestor') return 5
-      if (n.data.nodeKind === 'platform') return 8
-      return 6
-    })
-    .attr('fill', n => KIND_COLORS[n.data.nodeKind] ?? '#adb5bd')
+  nodeEls.append('circle')
+    .attr('class', 'node-circle')
+    .attr('r', d => nodeRadius(d.kind))
+    .attr('fill', d => KIND_COLORS[d.kind] ?? '#adb5bd')
     .attr('stroke', '#212529')
     .attr('stroke-width', 1.5)
+    .style('pointer-events', 'all')
 
-  node.filter(n => n.data.nodeKind === 'combined').append('circle')
+  nodeEls.filter(d => d.kind === 'full_product_name')
+    .append('circle')
+    .attr('class', 'combined-ring')
     .attr('r', 10)
     .attr('fill', 'none')
-    .attr('stroke', n => relColor(n.data.relationCategory))
+    .attr('stroke', d => relColor(d.relationCategory))
     .attr('stroke-width', 1)
     .attr('stroke-dasharray', '3,2')
+    .style('pointer-events', 'none')
 
-  node.each(function(n) {
-    const kind = n.data.nodeKind
-    const isLeaf = kind === 'component'
-    const isTopLevel = n.parent?.data.name === '__root__'
-    const anchor = labelAnchor(isLeaf, isTopLevel)
-    const pih = n.data.product?.product_identification_helper
-    const entries = pih ? pihEntries(pih) : []
-
-    const nameColor = kind === 'ancestor'
-      ? '#6c757d'
-      : (n.data.product ? '#dee2e6' : '#adb5bd')
-    const nameFontWeight = kind === 'platform' ? '600' : '400'
-    const nameFontSize = kind === 'ancestor' ? '11px' : '12px'
-    const nameTitle = `${n.data.name}${n.data.productId ? `\n${n.data.productId}` : ''}`
-
-    const extraLines = kind === 'combined' && n.data.relationCategory
-      ? [{ text: n.data.relationCategory.replace(/_/g, ' '), color: relColor(n.data.relationCategory) }]
-      : []
-
-    renderNodeLabels(this, {
-      name: n.data.name,
-      nameColor,
-      nameFontSize,
-      nameFontWeight,
-      nameTitle,
-      productId: kind !== 'ancestor' ? n.data.productId : undefined,
-      extraLines,
-      pihEntries: entries,
-      anchor,
+  nodeEls.append('g')
+    .attr('class', 'node-label')
+    .style('cursor', 'pointer')
+    .style('pointer-events', 'all')
+    .on('click', (_evt, d) => {
+      const product = d.product ?? { name: d.name, product_id: d.productId ?? '' }
+      showProductDetail(product, d.branchCategory ?? d.relationCategory ?? d.kind)
     })
-  })
+    .each(function(d) {
+      const el = this as SVGGElement
+      const kind = d.kind
+      const anchor = labelAnchor(d.col === maxCol, d.col === minCol)
+      const pih = d.product?.product_identification_helper
+      const entries = pih ? pihEntries(pih) : []
+      const nameColor = kind === 'ancestor' ? '#6c757d' : (d.product ? '#dee2e6' : '#adb5bd')
+      const nameFontWeight = kind === 'relates_to' ? '600' : '400'
+      const nameFontSize = kind === 'ancestor' ? '11px' : '12px'
+      const nameTitle = `${d.name}${d.productId ? `\n${d.productId}` : ''}`
+      const extraLines = kind === 'full_product_name' && d.relationCategory
+        ? [{ text: d.relationCategory.replace(/_/g, ' '), color: relColor(d.relationCategory) }]
+        : []
+      renderNodeLabels(el, {
+        name: d.name, nameColor, nameFontSize, nameFontWeight, nameTitle,
+        productId: kind !== 'ancestor' ? d.productId : undefined,
+        extraLines, pihEntries: entries, anchor,
+      })
+    })
 
-  relTreeState = { svg, zoom, nodeEls: node, containerEl: container }
+  nodeEls
+    .on('mouseenter', (_evt, d) => {
+      const connected = connectedIds(d.id, nodeChains)
+      nodeG.selectAll<SVGGElement, LayerNode>('g.node').style('opacity', n => connected.has(n.id) ? '1' : '0.15')
+      linkG.selectAll<SVGPathElement, LayerEdge>('path').style('opacity', e => connected.has(e.sourceId) && connected.has(e.targetId) ? '1' : '0.05')
+    })
+    .on('mouseleave', () => {
+      nodeG.selectAll<SVGGElement, LayerNode>('g.node').style('opacity', '1')
+      linkG.selectAll<SVGPathElement, LayerEdge>('path').style('opacity', '1')
+    })
+
+  function highlightFn(productId: string): void {
+    nodeEls.selectAll<SVGCircleElement, unknown>('circle.highlight-ring').remove()
+
+    let found: LayerNode | null = null
+
+    nodeEls.each(function(d) {
+      if (d.productId === productId) {
+        found = d
+        const r = nodeRadius(d.kind)
+        d3.select(this).append('circle')
+          .attr('class', 'highlight-ring')
+          .attr('r', r + 8)
+          .attr('fill', 'none')
+          .attr('stroke', '#ffc107')
+          .attr('stroke-width', 2.5)
+          .style('pointer-events', 'none')
+      }
+    })
+
+    if (!found) return
+
+    const n = found as LayerNode
+    const cw2 = container.clientWidth || 800
+    const ch = container.clientHeight || 600
+    const scale = 1.5
+
+    svg.transition().duration(600)
+      .call(zoom.transform, d3.zoomIdentity.translate(cw2 / 2 - n.x * scale, ch / 2 - n.y * scale).scale(scale))
+  }
+
+  relTreeState = { svg, zoom, containerEl: container, highlightFn }
 }
 
 export function highlightProductInRelTree(productId: string): void {
-  const state = relTreeState
-  if (!state) return
-
-  state.nodeEls.selectAll<SVGCircleElement, unknown>('circle.highlight-ring').remove()
-
-  let found: d3.HierarchyPointNode<RelTreeNode> | null = null
-
-  state.nodeEls.each(function(n) {
-    if (n.data.productId === productId) {
-      found = n
-      const r = n.data.nodeKind === 'platform' ? 8 : 6
-      d3.select(this).append('circle')
-        .attr('class', 'highlight-ring')
-        .attr('r', r + 8)
-        .attr('fill', 'none')
-        .attr('stroke', '#ffc107')
-        .attr('stroke-width', 2.5)
-        .style('pointer-events', 'none')
-    }
-  })
-
-  if (!found) return
-
-  const n = found as d3.HierarchyPointNode<RelTreeNode>
-  const containerEl = state.containerEl
-  const cw = containerEl.clientWidth || 800
-  const ch = containerEl.clientHeight || 600
-  const scale = 1.5
-
-  const tx = cw / 2 - n.y * scale
-  const ty = ch / 2 - n.x * scale
-
-  state.svg.transition().duration(600)
-    .call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
+  relTreeState?.highlightFn(productId)
 }

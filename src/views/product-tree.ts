@@ -11,6 +11,8 @@ interface TreeNode {
   children?: TreeNode[]
 }
 
+type HNode = d3.HierarchyNode<TreeNode> & { _children?: HNode[]; collapsed?: boolean }
+
 const BRANCH_COLORS: Record<string, string> = {
   vendor: '#f0ad4e',
   product_name: '#5bc0de',
@@ -87,7 +89,7 @@ function buildLegend(): HTMLElement {
 
   const hint = document.createElement('span')
   hint.className = 'ms-auto small text-secondary'
-  hint.textContent = 'Drag to pan · Scroll to zoom · Click nodes for details'
+  hint.textContent = 'Click circle to collapse/expand · Click label for details · Scroll to zoom'
   div.appendChild(hint)
 
   return div
@@ -110,100 +112,150 @@ function drawTree(container: HTMLElement, root: TreeNode): void {
   const hGap = 40
   const vGap = 8
 
-  const hierarchy = d3.hierarchy(root)
-  const treeLayout = d3.tree<TreeNode>()
-    .nodeSize([BASE_NODE_HEIGHT + vGap, nodeWidth + hGap])
-    .separation((a, b) => {
-      const aH = nodeSlotHeight(a)
-      const bH = nodeSlotHeight(b)
-      const needed = (aH + bH) / 2 + vGap
-      const base = BASE_NODE_HEIGHT + vGap
-      return needed / base
-    })
-
-  const pointRoot = treeLayout(hierarchy)
-
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-  pointRoot.each(node => {
-    if (node.x < minX) minX = node.x
-    if (node.x > maxX) maxX = node.x
-    if (node.y < minY) minY = node.y
-    if (node.y > maxY) maxY = node.y
-  })
-
-  const padding = 20
-  const svgWidth = maxY - minY + nodeWidth + padding * 2
-  const svgHeight = maxX - minX + BASE_NODE_HEIGHT + padding * 2
-
-  const width = container.clientWidth || 800
+  const hierarchy = d3.hierarchy(root) as HNode
 
   const svg = d3.select(container)
     .append('svg')
     .attr('width', '100%')
     .attr('height', '100%')
-    .style('min-width', `${svgWidth}px`)
-    .style('min-height', `${svgHeight}px`)
 
   const g = svg.append('g')
-
-  const initialX = padding - minY + (width - svgWidth) / 2
-  const initialY = padding - minX
-  const initialTransform = d3.zoomIdentity.translate(initialX, initialY)
+  const linkG = g.append('g')
+  const nodeG = g.append('g')
 
   const zoom = d3.zoom<SVGSVGElement, unknown>()
     .scaleExtent([0.1, 4])
     .on('zoom', e => g.attr('transform', e.transform.toString()))
 
-  svg.call(zoom)
-  svg.call(zoom.transform, initialTransform)
+  svg.call(zoom).on('dblclick.zoom', null)
 
-  g.selectAll<SVGPathElement, d3.HierarchyPointLink<TreeNode>>('path.link')
-    .data(pointRoot.links().filter(l => l.source.data.name !== '__root__'))
-    .enter()
-    .append('path')
-    .attr('class', 'link')
-    .attr('fill', 'none')
-    .attr('stroke', '#495057')
-    .attr('stroke-width', 1.5)
-    .attr('d', d3.linkHorizontal<d3.HierarchyPointLink<TreeNode>, d3.HierarchyPointNode<TreeNode>>()
-      .x(n => n.y)
-      .y(n => n.x)
-    )
+  const linkGen = d3.linkHorizontal<d3.HierarchyPointLink<TreeNode>, d3.HierarchyPointNode<TreeNode>>()
+    .x(n => n.y)
+    .y(n => n.x)
 
-  const visibleNodes = pointRoot.descendants().filter(n => n.data.name !== '__root__')
+  let initialized = false
 
-  const node = g.selectAll<SVGGElement, d3.HierarchyPointNode<TreeNode>>('g.node')
-    .data(visibleNodes)
-    .enter()
-    .append('g')
-    .attr('class', 'node')
-    .attr('transform', n => `translate(${n.y},${n.x})`)
-    .style('cursor', n => n.data.product ? 'pointer' : 'default')
-    .on('click', (_evt, n) => {
-      if (n.data.product) showProductDetail(n.data.product, n.data.category)
+  function update(): void {
+    const treeLayout = d3.tree<TreeNode>()
+      .nodeSize([BASE_NODE_HEIGHT + vGap, nodeWidth + hGap])
+      .separation((a, b) => {
+        const aH = nodeSlotHeight(a)
+        const bH = nodeSlotHeight(b)
+        const needed = (aH + bH) / 2 + vGap
+        return Math.max(1, needed / (BASE_NODE_HEIGHT + vGap))
+      })
+
+    const pointRoot = treeLayout(hierarchy as d3.HierarchyNode<TreeNode>)
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    pointRoot.each(n => {
+      if (n.x < minX) minX = n.x
+      if (n.x > maxX) maxX = n.x
+      if (n.y < minY) minY = n.y
+      if (n.y > maxY) maxY = n.y
     })
 
-  node.append('circle')
-    .attr('r', 6)
-    .attr('fill', n => getCategoryColor(n.data.category))
-    .attr('stroke', '#212529')
-    .attr('stroke-width', 1.5)
+    const padding = 20
+    const svgWidth = maxY - minY + nodeWidth + padding * 2
+    const svgHeight = maxX - minX + BASE_NODE_HEIGHT + padding * 2
 
-  node.each(function(n) {
-    const isLeaf = !n.children || n.children.length === 0
-    const isTopLevel = n.parent?.data.name === '__root__'
-    const anchor = labelAnchor(isLeaf, isTopLevel)
-    const pih = n.data.product?.product_identification_helper
-    const entries = pih ? pihEntries(pih) : []
+    svg.style('min-width', `${svgWidth}px`).style('min-height', `${svgHeight}px`)
 
-    renderNodeLabels(this, {
-      name: n.data.name,
-      nameColor: n.data.product ? '#dee2e6' : '#adb5bd',
-      nameFontWeight: n.data.product ? '500' : '400',
-      nameTitle: n.data.name + (n.data.product ? ` [${n.data.product.product_id}]` : ''),
-      productId: n.data.product?.product_id,
-      pihEntries: entries,
-      anchor,
+    if (!initialized) {
+      initialized = true
+      const width = container.clientWidth || 800
+      const initialX = padding - minY + (width - svgWidth) / 2
+      const initialY = padding - minX
+      svg.call(zoom.transform, d3.zoomIdentity.translate(initialX, initialY))
+    }
+
+    const visibleNodes = pointRoot.descendants().filter(n => n.data.name !== '__root__')
+    const visibleLinks = pointRoot.links().filter(l => l.source.data.name !== '__root__')
+
+    const linkSel = linkG.selectAll<SVGPathElement, d3.HierarchyPointLink<TreeNode>>('path.link')
+      .data(visibleLinks, d => `${d.source.data.name}→${d.target.data.name}`)
+
+    linkSel.enter().append('path')
+      .attr('class', 'link')
+      .attr('fill', 'none')
+      .attr('stroke', '#495057')
+      .attr('stroke-width', 1.5)
+      .attr('d', linkGen)
+      .merge(linkSel)
+      .attr('d', linkGen)
+
+    linkSel.exit().remove()
+
+    const nodeSel = nodeG.selectAll<SVGGElement, d3.HierarchyPointNode<TreeNode>>('g.node')
+      .data(visibleNodes, d => d.data.name)
+
+    const nodeEnter = nodeSel.enter().append('g')
+      .attr('class', 'node')
+      .attr('transform', n => `translate(${n.y},${n.x})`)
+
+    nodeEnter.append('circle')
+      .attr('class', 'node-circle')
+      .attr('r', 6)
+      .attr('stroke', '#212529')
+      .attr('stroke-width', 1.5)
+      .style('pointer-events', 'all')
+      .style('cursor', n => (n as HNode)._children || n.children ? 'pointer' : 'default')
+      .on('click', (evt, n) => {
+        evt.stopPropagation()
+        const hn = n as HNode
+        if (!hn._children && !hn.children) return
+        if (hn.children) {
+          hn._children = hn.children as HNode[]
+          hn.children = undefined
+        } else {
+          hn.children = hn._children
+          hn._children = undefined
+        }
+        update()
+      })
+
+    nodeEnter.append('g')
+      .attr('class', 'node-label')
+      .style('cursor', 'pointer')
+      .style('pointer-events', 'all')
+      .on('click', (_evt, n) => {
+        const product = n.data.product ?? { name: n.data.name, product_id: '' }
+        showProductDetail(product, n.data.category)
+      })
+
+    const nodeMerge = nodeEnter.merge(nodeSel)
+
+    nodeMerge.attr('transform', n => `translate(${n.y},${n.x})`)
+
+    nodeMerge.select<SVGCircleElement>('circle.node-circle')
+      .attr('fill', n => {
+        const hn = n as HNode
+        return hn._children ? '#495057' : getCategoryColor(n.data.category)
+      })
+      .style('cursor', n => (n as HNode)._children || n.children ? 'pointer' : 'default')
+
+    nodeMerge.select<SVGGElement>('g.node-label').each(function(n) {
+      const el = this as SVGGElement
+      el.innerHTML = ''
+      const isLeaf = !n.children && !(n as HNode)._children
+      const isTopLevel = n.parent?.data.name === '__root__'
+      const anchor = labelAnchor(isLeaf, isTopLevel)
+      const pih = n.data.product?.product_identification_helper
+      const entries = pih ? pihEntries(pih) : []
+
+      renderNodeLabels(el, {
+        name: n.data.name,
+        nameColor: n.data.product ? '#dee2e6' : '#adb5bd',
+        nameFontWeight: n.data.product ? '500' : '400',
+        nameTitle: n.data.name + (n.data.product ? ` [${n.data.product.product_id}]` : ''),
+        productId: n.data.product?.product_id,
+        pihEntries: entries,
+        anchor,
+      })
     })
-  })
+
+    nodeSel.exit().remove()
+  }
+
+  update()
 }

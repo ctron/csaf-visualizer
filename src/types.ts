@@ -263,4 +263,5 @@ export interface ParsedModel {
   doc: CsafDocument
   allProducts: Map<string, FullProductName>
   productAncestors: Map<string, BranchAncestor[]>
+  productBranchCategory: Map<string, string>
 }

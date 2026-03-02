@@ -11,6 +11,7 @@ export function parseCsaf(json: string): ParsedModel {
 
   const allProducts = new Map<string, FullProductName>()
   const productAncestors = new Map<string, BranchAncestor[]>()
+  const productBranchCategory = new Map<string, string>()
 
   if (doc.product_tree) {
     if (doc.product_tree.full_product_names) {
@@ -19,7 +20,7 @@ export function parseCsaf(json: string): ParsedModel {
       }
     }
     if (doc.product_tree.branches) {
-      collectProductsFromBranches(doc.product_tree.branches, allProducts, productAncestors, [])
+      collectProductsFromBranches(doc.product_tree.branches, allProducts, productAncestors, productBranchCategory, [])
     }
     if (doc.product_tree.relationships) {
       for (const r of doc.product_tree.relationships) {
@@ -28,13 +29,14 @@ export function parseCsaf(json: string): ParsedModel {
     }
   }
 
-  return { doc, allProducts, productAncestors }
+  return { doc, allProducts, productAncestors, productBranchCategory }
 }
 
 function collectProductsFromBranches(
   branches: Branch[],
   map: Map<string, FullProductName>,
   ancestorMap: Map<string, BranchAncestor[]>,
+  categoryMap: Map<string, string>,
   path: BranchAncestor[],
 ): void {
   for (const branch of branches) {
@@ -42,9 +44,10 @@ function collectProductsFromBranches(
     if (branch.product) {
       map.set(branch.product.product_id, branch.product)
       ancestorMap.set(branch.product.product_id, path)
+      categoryMap.set(branch.product.product_id, branch.category)
     }
     if (branch.branches) {
-      collectProductsFromBranches(branch.branches, map, ancestorMap, currentPath)
+      collectProductsFromBranches(branch.branches, map, ancestorMap, categoryMap, currentPath)
     }
   }
 }
