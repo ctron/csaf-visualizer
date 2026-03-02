@@ -38,7 +38,10 @@ You can also pass these as query parameters to share a direct link:
 
 The target URL is URL-encoded and appended directly to the proxy prefix, so the proxy field should end with the appropriate separator, e.g.:
 
-https://ctron.github.io/csaf-visualizer/?url=https://security.access.redhat.com/data/csaf/v2/vex/2024/cve-2024-0232.json&cors-proxy=https://whateverorigin.org/get?url=
+* https://ctron.github.io/csaf-visualizer/?url=https://security.access.redhat.com/data/csaf/v2/vex/2024/cve-2024-0232.json&cors-proxy=https://whateverorigin.org/get?url=
+* https://ctron.github.io/csaf-visualizer/?url=https://msrc.microsoft.com/csaf/vex/2025/msrc_cve-2025-40005.json&cors-proxy=https://whateverorigin.org/get?url=
+* https://ctron.github.io/csaf-visualizer/?url=https://cert-portal.siemens.com/productcert/csaf/ssa-979775.json&cors-proxy=https://whateverorigin.org/get?url=
+* https://ctron.github.io/csaf-visualizer/?url=https://www.se.com/.well-known/csaf/2025/sevd-2025-042-02.json&cors-proxy=https://whateverorigin.org/get?url=
 
 ## Development
 
