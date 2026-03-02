@@ -25,6 +25,21 @@ A browser-based visualizer for [CSAF 2.0](https://docs.oasis-open.org/csaf/csaf/
 
 Paste a CSAF 2.0 JSON document into the text area on the left and click **Parse & Visualize**.
 
+### Loading from a URL
+
+Click **Load from URL…** in the sidebar to expand the URL loader. Enter the document URL and optionally a CORS proxy, then click **Load**.
+
+You can also pass these as query parameters to share a direct link:
+
+| Parameter    | Description                                        |
+|--------------|----------------------------------------------------|
+| `url`        | URL of the CSAF JSON document to load              |
+| `cors-proxy` | CORS proxy prefix to prepend to the URL (optional) |
+
+The target URL is URL-encoded and appended directly to the proxy prefix, so the proxy field should end with the appropriate separator, e.g.:
+
+https://ctron.github.io/csaf-visualizer/?url=https://security.access.redhat.com/data/csaf/v2/vex/2024/cve-2024-0057.json&cors-proxy=https://whateverorigin.org/get?url=
+
 ## Development
 
 ```bash
