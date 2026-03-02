@@ -2,6 +2,7 @@
   "name": "csaf-visualizer",
   "version": "0.1.0",
   "type": "module",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
