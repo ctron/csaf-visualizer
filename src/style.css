@@ -1,0 +1,139 @@
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+.h-main {
+  height: calc(100vh - 56px);
+  max-width: 100%;
+}
+
+.h-main .row {
+  height: 100%;
+}
+
+#main-content {
+  min-height: 0;
+}
+
+#viz-area {
+  min-height: 0;
+  height: 100%;
+}
+
+#sidebar {
+  min-width: 240px;
+  max-width: 320px;
+  height: 100%;
+  overflow: hidden;
+}
+
+#sidebar .p-3 {
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+#json-input {
+  font-size: 12px;
+  resize: none;
+  min-height: 0;
+  flex: 1;
+}
+
+#tab-content {
+  position: relative;
+  flex: 1;
+  height: 0;
+}
+
+.tab-pane {
+  display: none;
+}
+
+.tab-pane.active {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+#tab-overview {
+  display: none;
+}
+
+#tab-overview.active {
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+#tab-product-tree,
+#tab-relationship-tree,
+#tab-relationships {
+  overflow: hidden;
+}
+
+.nav-tabs .nav-link {
+  color: var(--bs-secondary-color);
+}
+
+.nav-tabs .nav-link.active {
+  color: var(--bs-body-color);
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.product-link {
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.product-link:hover {
+  opacity: 0.8;
+}
+
+.product-link.pid-highlight {
+  outline: 2px solid #ffc107;
+  outline-offset: 1px;
+}
+
+svg text {
+  user-select: none;
+  pointer-events: none;
+}
+
+g.node text {
+  pointer-events: all;
+}
+
+svg text.pih-toggle {
+  pointer-events: all;
+}
+
+.offcanvas {
+  background-color: var(--bs-body-bg);
+}
+
+code {
+  font-size: 0.85em;
+}
+
+[data-bs-theme="light"] svg text {
+  fill: #212529 !important;
+}
+
+[data-bs-theme="light"] svg path.link {
+  stroke: #adb5bd !important;
+}
+
+@keyframes highlight-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+circle.highlight-ring {
+  animation: highlight-pulse 1.2s ease-in-out infinite;
+}

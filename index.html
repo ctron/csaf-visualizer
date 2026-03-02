@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CSAF 2.0 Visualizer</title>
+    <script>
+      (function () {
+        var stored = localStorage.getItem('csaf-theme');
+        var theme = (stored === 'dark' || stored === 'light') ? stored : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-bs-theme', theme);
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <nav class="navbar border-bottom border-secondary px-3">
+      <span class="navbar-brand mb-0 h1">
+        <span class="text-warning fw-bold">CSAF</span>
+        <span class="fw-light ms-1">2.0 Visualizer</span>
+      </span>
+      <span id="doc-title" class="text-secondary small me-auto ms-3"></span>
+      <button id="theme-toggle" class="btn btn-sm btn-outline-secondary" title="Toggle theme"></button>
+    </nav>
+
+    <div class="container-fluid h-main">
+      <div class="row h-100">
+
+        <div class="col-3 col-xl-2 border-end border-secondary d-flex flex-column p-0 overflow-hidden" id="sidebar">
+          <div class="p-3 flex-grow-1 d-flex flex-column">
+            <label for="json-input" class="form-label text-secondary small text-uppercase fw-semibold mb-2">
+              CSAF JSON Document
+            </label>
+            <textarea
+              id="json-input"
+              class="form-control font-monospace flex-grow-1"
+              placeholder="Paste CSAF 2.0 JSON here..."
+              spellcheck="false"
+            ></textarea>
+            <div id="parse-error" class="alert alert-danger mt-2 py-2 small d-none" role="alert"></div>
+            <button id="parse-btn" class="btn btn-warning mt-2 fw-semibold">
+              Parse &amp; Visualize
+            </button>
+            <button id="clear-btn" class="btn btn-outline-secondary mt-2 btn-sm d-none">
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div class="col-9 col-xl-10 d-flex flex-column p-0 h-100" id="main-content">
+          <div id="empty-state" class="d-flex align-items-center justify-content-center flex-grow-1 text-secondary">
+            <div class="text-center">
+              <div class="display-1 mb-3 opacity-25">📄</div>
+              <p class="lead">Paste a CSAF 2.0 JSON document and click <strong>Parse &amp; Visualize</strong></p>
+              <p class="small">Visualizes product trees, relationships, and vulnerabilities</p>
+            </div>
+          </div>
+
+          <div id="viz-area" class="d-none d-flex flex-column flex-grow-1">
+            <ul class="nav nav-tabs border-secondary px-3 pt-2" id="main-tabs">
+              <li class="nav-item">
+                <button class="nav-link active" data-tab="overview">Overview</button>
+              </li>
+              <li class="nav-item">
+                <button class="nav-link" data-tab="product-tree">Product Tree</button>
+              </li>
+              <li class="nav-item">
+                <button class="nav-link" data-tab="relationships">Relationships</button>
+              </li>
+              <li class="nav-item">
+                <button class="nav-link" data-tab="relationship-tree">Relationship Tree</button>
+              </li>
+            </ul>
+
+            <div class="tab-content" id="tab-content">
+              <div class="tab-pane p-3" id="tab-overview"></div>
+              <div class="tab-pane" id="tab-product-tree"></div>
+              <div class="tab-pane" id="tab-relationships"></div>
+              <div class="tab-pane" id="tab-relationship-tree"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="product-detail" style="width: 420px;">
+      <div class="offcanvas-header border-bottom border-secondary">
+        <h5 class="offcanvas-title" id="product-detail-title">Product Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+      </div>
+      <div class="offcanvas-body" id="product-detail-body"></div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

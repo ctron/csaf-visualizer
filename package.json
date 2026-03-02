@@ -1,0 +1,20 @@
+{
+  "name": "csaf-visualizer",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "bootstrap": "^5.3.3",
+    "d3": "^7.9.0"
+  },
+  "devDependencies": {
+    "@types/bootstrap": "^5.2.10",
+    "@types/d3": "^7.4.3",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11"
+  }
+}
