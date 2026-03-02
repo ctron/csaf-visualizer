@@ -259,9 +259,26 @@ export interface BranchAncestor {
   category: string
 }
 
+export type ProductStatusKey =
+  | 'known_affected'
+  | 'known_not_affected'
+  | 'fixed'
+  | 'first_fixed'
+  | 'first_affected'
+  | 'last_affected'
+  | 'recommended'
+  | 'under_investigation'
+
+export interface ProductVulnEntry {
+  vuln: Vulnerability
+  statuses: ProductStatusKey[]
+  remediations: Remediation[]
+}
+
 export interface ParsedModel {
   doc: CsafDocument
   allProducts: Map<string, FullProductName>
   productAncestors: Map<string, BranchAncestor[]>
   productBranchCategory: Map<string, string>
+  productVulnInfo: Map<string, ProductVulnEntry[]>
 }

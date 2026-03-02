@@ -2,7 +2,7 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import { Offcanvas } from 'bootstrap'
 import './style.css'
 
-import type { FullProductName, ParsedModel } from './types'
+import type { FullProductName, ParsedModel, ProductVulnEntry } from './types'
 import { parseCsaf } from './parser'
 import { renderOverview } from './views/overview'
 import { renderProductTree } from './views/product-tree'
@@ -215,12 +215,13 @@ export function navigateToRelTree(productId: string): void {
   requestAnimationFrame(() => highlightProductInRelTree(productId))
 }
 
-export function showProductDetail(product: FullProductName, nodeType?: string): void {
+export function showProductDetail(product: FullProductName, nodeType?: string, model?: ParsedModel): void {
   const title = document.getElementById('product-detail-title')!
   const body = document.getElementById('product-detail-body')!
 
   title.textContent = product.name
-  body.innerHTML = renderProductDetailBody(product, nodeType)
+  const vulnEntries = model?.productVulnInfo.get(product.product_id) ?? []
+  body.innerHTML = renderProductDetailBody(product, nodeType, vulnEntries)
 
   const el = document.getElementById('product-detail')!
   if (!offcanvasInstance) {
@@ -229,7 +230,7 @@ export function showProductDetail(product: FullProductName, nodeType?: string): 
   offcanvasInstance.show()
 }
 
-function renderProductDetailBody(product: FullProductName, nodeType?: string): string {
+function renderProductDetailBody(product: FullProductName, nodeType?: string, vulnEntries: ProductVulnEntry[] = []): string {
   const pih = product.product_identification_helper
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
@@ -240,13 +241,7 @@ function renderProductDetailBody(product: FullProductName, nodeType?: string): s
     </div>
   `
 
-  if (!pih) {
-    if (!product.product_id) return html
-    html += '<p class="text-secondary small">No product identification helper available.</p>'
-    return html
-  }
-
-  if (pih.purl) {
+  if (pih && pih.purl) {
     html += `
       <div class="mb-3">
         <div class="small text-secondary mb-1 fw-semibold">Package URL (PURL)</div>
@@ -255,7 +250,7 @@ function renderProductDetailBody(product: FullProductName, nodeType?: string): s
     `
   }
 
-  if (pih.cpe) {
+  if (pih && pih.cpe) {
     html += `
       <div class="mb-3">
         <div class="small text-secondary mb-1 fw-semibold">CPE</div>
@@ -264,7 +259,7 @@ function renderProductDetailBody(product: FullProductName, nodeType?: string): s
     `
   }
 
-  if (pih.hashes && pih.hashes.length > 0) {
+  if (pih && pih.hashes && pih.hashes.length > 0) {
     const rows = pih.hashes.flatMap(h =>
       h.file_hashes.map(fh => `
         <tr>
@@ -285,7 +280,7 @@ function renderProductDetailBody(product: FullProductName, nodeType?: string): s
     `
   }
 
-  if (pih.sbom_urls && pih.sbom_urls.length > 0) {
+  if (pih && pih.sbom_urls && pih.sbom_urls.length > 0) {
     html += `
       <div class="mb-3">
         <div class="small text-secondary mb-1 fw-semibold">SBOM URLs</div>
@@ -296,7 +291,7 @@ function renderProductDetailBody(product: FullProductName, nodeType?: string): s
     `
   }
 
-  if (pih.model_numbers && pih.model_numbers.length > 0) {
+  if (pih && pih.model_numbers && pih.model_numbers.length > 0) {
     html += `
       <div class="mb-3">
         <div class="small text-secondary mb-1 fw-semibold">Model Numbers</div>
@@ -305,7 +300,7 @@ function renderProductDetailBody(product: FullProductName, nodeType?: string): s
     `
   }
 
-  if (pih.serial_numbers && pih.serial_numbers.length > 0) {
+  if (pih && pih.serial_numbers && pih.serial_numbers.length > 0) {
     html += `
       <div class="mb-3">
         <div class="small text-secondary mb-1 fw-semibold">Serial Numbers</div>
@@ -314,7 +309,7 @@ function renderProductDetailBody(product: FullProductName, nodeType?: string): s
     `
   }
 
-  if (pih.skus && pih.skus.length > 0) {
+  if (pih && pih.skus && pih.skus.length > 0) {
     html += `
       <div class="mb-3">
         <div class="small text-secondary mb-1 fw-semibold">SKUs</div>
@@ -323,7 +318,7 @@ function renderProductDetailBody(product: FullProductName, nodeType?: string): s
     `
   }
 
-  if (pih.x_generic_uris && pih.x_generic_uris.length > 0) {
+  if (pih && pih.x_generic_uris && pih.x_generic_uris.length > 0) {
     const rows = pih.x_generic_uris.map(g => `
       <tr>
         <td class="small text-secondary">${esc(g.namespace)}</td>
@@ -341,5 +336,52 @@ function renderProductDetailBody(product: FullProductName, nodeType?: string): s
     `
   }
 
+  if (vulnEntries.length > 0) {
+    html += `<div class="mb-1"><div class="small text-secondary mb-2 fw-semibold">Vulnerabilities</div>`
+    for (const entry of vulnEntries) {
+      const v = entry.vuln
+      const label = v.cve ?? v.title ?? v.ids?.[0]?.text ?? 'Unknown'
+      const statusBadges = entry.statuses.map(s => {
+        const color = STATUS_BADGE_COLOR[s] ?? 'secondary'
+        return `<span class="badge bg-${color} me-1">${esc(s.replace(/_/g, ' '))}</span>`
+      }).join('')
+      html += `<div class="border border-secondary rounded p-2 mb-2">`
+      html += `<div class="fw-semibold small mb-1">${esc(label)}</div>`
+      html += `<div class="mb-1">${statusBadges}</div>`
+      if (entry.remediations.length > 0) {
+        for (const r of entry.remediations) {
+          const remColor = REMEDIATION_BADGE_COLOR[r.category] ?? 'secondary'
+          html += `<div class="mt-2 small">`
+          html += `<span class="badge bg-${remColor} me-1">${esc(r.category.replace(/_/g, ' '))}</span>`
+          html += `<span class="text-body">${esc(r.details)}</span>`
+          if (r.url) html += ` <a href="${esc(r.url)}" target="_blank" rel="noopener" class="ms-1">&#x2197;</a>`
+          html += `</div>`
+        }
+      }
+      html += `</div>`
+    }
+    html += `</div>`
+  }
+
   return html
+}
+
+const STATUS_BADGE_COLOR: Record<string, string> = {
+  known_affected: 'danger',
+  known_not_affected: 'success',
+  fixed: 'success',
+  first_fixed: 'success',
+  first_affected: 'warning',
+  last_affected: 'warning',
+  recommended: 'info',
+  under_investigation: 'warning',
+}
+
+const REMEDIATION_BADGE_COLOR: Record<string, string> = {
+  fix_planned: 'warning',
+  mitigation: 'info',
+  no_fix_planned: 'danger',
+  none_available: 'secondary',
+  vendor_fix: 'success',
+  workaround: 'warning',
 }

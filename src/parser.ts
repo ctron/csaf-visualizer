@@ -1,4 +1,4 @@
-import type { BranchAncestor, CsafDocument, FullProductName, ParsedModel, Branch } from './types'
+import type { BranchAncestor, CsafDocument, FullProductName, ParsedModel, Branch, ProductStatusKey, ProductVulnEntry } from './types'
 
 export function parseCsaf(json: string): ParsedModel {
   const doc: CsafDocument = JSON.parse(json)
@@ -29,7 +29,33 @@ export function parseCsaf(json: string): ParsedModel {
     }
   }
 
-  return { doc, allProducts, productAncestors, productBranchCategory }
+  const productVulnInfo = new Map<string, ProductVulnEntry[]>()
+
+  const STATUS_KEYS: ProductStatusKey[] = [
+    'known_affected', 'known_not_affected', 'fixed', 'first_fixed',
+    'first_affected', 'last_affected', 'recommended', 'under_investigation',
+  ]
+
+  for (const vuln of doc.vulnerabilities ?? []) {
+    const productStatuses = new Map<string, Set<ProductStatusKey>>()
+
+    for (const key of STATUS_KEYS) {
+      for (const pid of vuln.product_status?.[key] ?? []) {
+        if (!productStatuses.has(pid)) productStatuses.set(pid, new Set())
+        productStatuses.get(pid)!.add(key)
+      }
+    }
+
+    for (const [pid, statuses] of productStatuses) {
+      const remediations = (vuln.remediations ?? []).filter(
+        r => r.product_ids?.includes(pid) ?? false
+      )
+      if (!productVulnInfo.has(pid)) productVulnInfo.set(pid, [])
+      productVulnInfo.get(pid)!.push({ vuln, statuses: Array.from(statuses), remediations })
+    }
+  }
+
+  return { doc, allProducts, productAncestors, productBranchCategory, productVulnInfo }
 }
 
 function collectProductsFromBranches(

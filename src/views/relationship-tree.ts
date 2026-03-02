@@ -1,5 +1,5 @@
 import * as d3 from 'd3'
-import type { ParsedModel, FullProductName } from '../types'
+import type { ParsedModel, FullProductName, ProductStatusKey } from '../types'
 import { showProductDetail } from '../main'
 import { pihEntries } from '../pih'
 import { labelAnchor, renderNodeLabels } from '../node-labels'
@@ -40,21 +40,65 @@ const RELATIONSHIP_COLORS: Record<string, string> = {
   optional_component_of: '#9b59b6',
 }
 
-const KIND_COLORS: Record<string, string> = {
-  ancestor: '#6c757d',
-  relates_to: '#5bc0de',
-  full_product_name: '#f0ad4e',
-  product_reference: '#5cb85c',
+const BRANCH_COLORS: Record<string, string> = {
+  vendor: '#f0ad4e',
+  product_name: '#5bc0de',
+  product_version: '#5cb85c',
+  product_version_range: '#5cb85c',
+  product_family: '#9b59b6',
+  architecture: '#e67e22',
+  language: '#1abc9c',
+  patch_level: '#3498db',
+  service_pack: '#2980b9',
+  host_name: '#e74c3c',
+  legacy: '#95a5a6',
+  specification: '#34495e',
+}
+
+function getCategoryColor(category?: string): string {
+  return category ? (BRANCH_COLORS[category] ?? '#adb5bd') : '#adb5bd'
+}
+
+function nodeColor(d: LayerNode): string {
+  if (d.kind === 'full_product_name') return '#adb5bd'
+  return getCategoryColor(d.branchCategory)
 }
 
 function relColor(cat?: string): string {
   return cat ? (RELATIONSHIP_COLORS[cat] ?? '#adb5bd') : '#adb5bd'
 }
 
-function nodeRadius(kind: string): number {
-  if (kind === 'ancestor') return 5
-  if (kind === 'relates_to') return 8
-  return 6
+const STATUS_PRIORITY: ProductStatusKey[] = [
+  'known_affected',
+  'under_investigation',
+  'first_affected',
+  'last_affected',
+  'fixed',
+  'first_fixed',
+  'recommended',
+  'known_not_affected',
+]
+
+const STATUS_DOT_COLOR: Record<string, string> = {
+  known_affected: '#dc3545',
+  under_investigation: '#fd7e14',
+  first_affected: '#fd7e14',
+  last_affected: '#fd7e14',
+  fixed: '#198754',
+  first_fixed: '#198754',
+  recommended: '#0dcaf0',
+  known_not_affected: '#6c757d',
+}
+
+function worstStatusColor(productId: string | undefined, model: ParsedModel): string | null {
+  if (!productId) return null
+  const entries = model.productVulnInfo.get(productId)
+  if (!entries || entries.length === 0) return null
+  const allStatuses = new Set(entries.flatMap(e => e.statuses))
+  for (const s of STATUS_PRIORITY) {
+    if (allStatuses.has(s)) return STATUS_DOT_COLOR[s] ?? null
+  }
+  return null
 }
 
 function connectedIds(startId: string, nodeChains: Map<string, Set<number>>): Set<string> {
@@ -157,14 +201,15 @@ export function renderRelationshipTree(container: HTMLElement, model: ParsedMode
     tagChain(chainId, componentNodeId)
     addEdge(combinedId, componentNodeId, rel.category)
 
-    for (let i = 0; i < componentAncestors.length; i++) {
+    const nComp = componentAncestors.length
+    for (let i = nComp - 1; i >= 0; i--) {
       const anc = componentAncestors[i]
       const ancId = '__comp_anc__' + componentAncestors.slice(0, i + 1).map(a => a.name).join('\0')
-      const ancCol = 2 + i
+      const ancCol = 2 + (nComp - 1 - i)
       ensureNode({ id: ancId, col: ancCol, kind: 'ancestor', name: anc.name, branchCategory: anc.category, x: 0, y: 0 })
       tagChain(chainId, ancId)
-      const parentId = i === 0 ? componentNodeId : '__comp_anc__' + componentAncestors.slice(0, i).map(a => a.name).join('\0')
-      addEdge(parentId, ancId)
+      const childId = i === nComp - 1 ? componentNodeId : '__comp_anc__' + componentAncestors.slice(0, i + 2).map(a => a.name).join('\0')
+      addEdge(childId, ancId)
     }
   }
 
@@ -175,7 +220,7 @@ export function renderRelationshipTree(container: HTMLElement, model: ParsedMode
   const legend = buildLegend()
   container.appendChild(legend)
 
-  drawCustomLayout(container, allNodes, allEdges, nodeChains, minCol, maxCol, svgW, svgH)
+  drawCustomLayout(container, allNodes, allEdges, nodeChains, model, minCol, maxCol, svgW, svgH)
 }
 
 function computeLayout(
@@ -259,16 +304,10 @@ function buildLegend(): HTMLElement {
   const div = document.createElement('div')
   div.className = 'px-3 pt-2 pb-1 d-flex flex-wrap gap-3 border-bottom border-secondary align-items-center'
 
-  const kindEntries: [string, string][] = [
-    [KIND_COLORS.ancestor, 'Branch ancestor'],
-    [KIND_COLORS.relates_to, 'Platform (relates_to)'],
-    [KIND_COLORS.full_product_name, 'Combined product (full_product_name)'],
-    [KIND_COLORS.product_reference, 'Component (product_reference)'],
-  ]
-  for (const [color, label] of kindEntries) {
+  for (const [cat, color] of Object.entries(BRANCH_COLORS)) {
     const item = document.createElement('span')
     item.className = 'd-flex align-items-center gap-1 small'
-    item.innerHTML = `<span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>${label}`
+    item.innerHTML = `<span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>${cat.replace(/_/g, ' ')}`
     div.appendChild(item)
   }
 
@@ -297,6 +336,7 @@ function drawCustomLayout(
   allNodes: Map<string, LayerNode>,
   allEdges: LayerEdge[],
   nodeChains: Map<string, Set<number>>,
+  model: ParsedModel,
   minCol: number,
   maxCol: number,
   svgW: number,
@@ -356,11 +396,25 @@ function drawCustomLayout(
 
   nodeEls.append('circle')
     .attr('class', 'node-circle')
-    .attr('r', d => nodeRadius(d.kind))
-    .attr('fill', d => KIND_COLORS[d.kind] ?? '#adb5bd')
+    .attr('r', 6)
+    .attr('fill', d => nodeColor(d))
     .attr('stroke', '#212529')
     .attr('stroke-width', 1.5)
     .style('pointer-events', 'all')
+
+  nodeEls.each(function(d) {
+    const color = worstStatusColor(d.productId, model)
+    if (!color) return
+    d3.select(this).append('circle')
+      .attr('class', 'status-dot')
+      .attr('r', 3.5)
+      .attr('cx', 5)
+      .attr('cy', -5)
+      .attr('fill', color)
+      .attr('stroke', '#212529')
+      .attr('stroke-width', 1)
+      .style('pointer-events', 'none')
+  })
 
   nodeEls.filter(d => d.kind === 'full_product_name')
     .append('circle')
@@ -378,7 +432,7 @@ function drawCustomLayout(
     .style('pointer-events', 'all')
     .on('click', (_evt, d) => {
       const product = d.product ?? { name: d.name, product_id: d.productId ?? '' }
-      showProductDetail(product, d.branchCategory ?? d.relationCategory ?? d.kind)
+      showProductDetail(product, d.branchCategory ?? d.relationCategory ?? d.kind, model)
     })
     .each(function(d) {
       const el = this as SVGGElement
@@ -419,10 +473,9 @@ function drawCustomLayout(
     nodeEls.each(function(d) {
       if (d.productId === productId) {
         found = d
-        const r = nodeRadius(d.kind)
         d3.select(this).append('circle')
           .attr('class', 'highlight-ring')
-          .attr('r', r + 8)
+          .attr('r', 14)
           .attr('fill', 'none')
           .attr('stroke', '#ffc107')
           .attr('stroke-width', 2.5)
