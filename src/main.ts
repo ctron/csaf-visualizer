@@ -36,6 +36,17 @@ const tabButtons = document.querySelectorAll<HTMLButtonElement>('[data-tab]')
 initTheme()
 document.getElementById('theme-toggle')!.addEventListener('click', toggleTheme)
 
+const shaEl = document.getElementById('git-sha') as HTMLAnchorElement
+if (__GIT_SHA__ === 'dev') {
+  shaEl.textContent = 'dev'
+} else {
+  shaEl.href = `https://github.com/ctron/csaf-visualizer/commit/${__GIT_SHA__}`
+  shaEl.target = '_blank'
+  shaEl.rel = 'noopener'
+  shaEl.textContent = __GIT_SHA__.slice(0, 7)
+  shaEl.title = __GIT_SHA__
+}
+
 history.replaceState({ tab: 'overview' }, '', '')
 
 function loadRaw(raw: string): void {
