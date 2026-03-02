@@ -22,6 +22,9 @@ const parseError = document.getElementById('parse-error') as HTMLDivElement
 const emptyState = document.getElementById('empty-state') as HTMLDivElement
 const vizArea = document.getElementById('viz-area') as HTMLDivElement
 const docTitle = document.getElementById('doc-title') as HTMLSpanElement
+const urlInput = document.getElementById('url-input') as HTMLInputElement
+const corsProxyInput = document.getElementById('cors-proxy-input') as HTMLInputElement
+const loadUrlBtn = document.getElementById('load-url-btn') as HTMLButtonElement
 
 const tabOverview = document.getElementById('tab-overview') as HTMLDivElement
 const tabProductTree = document.getElementById('tab-product-tree') as HTMLDivElement
@@ -35,10 +38,7 @@ document.getElementById('theme-toggle')!.addEventListener('click', toggleTheme)
 
 history.replaceState({ tab: 'overview' }, '', '')
 
-parseBtn.addEventListener('click', () => {
-  const raw = jsonInput.value.trim()
-  if (!raw) return
-
+function loadRaw(raw: string): void {
   parseError.classList.add('d-none')
   parseError.textContent = ''
 
@@ -59,7 +59,63 @@ parseBtn.addEventListener('click', () => {
   docTitle.textContent = currentModel.doc.document.title
 
   renderCurrentTab()
+}
+
+parseBtn.addEventListener('click', () => {
+  const raw = jsonInput.value.trim()
+  if (!raw) return
+  loadRaw(raw)
 })
+
+function buildFetchUrl(url: string, corsProxy: string): string {
+  const proxy = corsProxy.trim()
+  if (!proxy) return url
+  return proxy + encodeURIComponent(url)
+}
+
+function fetchUrl(url: string, corsProxy: string): void {
+  const fetchTarget = buildFetchUrl(url, corsProxy)
+  parseError.classList.add('d-none')
+  emptyState.innerHTML = '<div class="text-center text-secondary"><div class="spinner-border mb-3" role="status"></div><p>Loading document\u2026</p></div>'
+  fetch(fetchTarget)
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`)
+      return r.text()
+    })
+    .then(text => {
+      try {
+        const json = JSON.parse(text)
+        if (typeof json.contents === 'string') return json.contents
+      } catch { /* not JSON wrapper, use as-is */ }
+      return text
+    })
+    .then(text => {
+      jsonInput.value = text
+      loadRaw(text)
+    })
+    .catch(err => {
+      emptyState.innerHTML = ''
+      parseError.textContent = `Failed to load URL: ${err instanceof Error ? err.message : String(err)}`
+      parseError.classList.remove('d-none')
+    })
+}
+
+loadUrlBtn.addEventListener('click', () => {
+  const url = urlInput.value.trim()
+  if (!url) return
+  fetchUrl(url, corsProxyInput.value)
+})
+
+const params = new URLSearchParams(window.location.search)
+const urlParam = params.get('url')
+const corsProxyParam = params.get('cors-proxy') ?? ''
+
+if (urlParam) {
+  urlInput.value = urlParam
+  corsProxyInput.value = corsProxyParam
+  document.getElementById('url-loader')!.classList.add('show')
+  fetchUrl(urlParam, corsProxyParam)
+}
 
 clearBtn.addEventListener('click', () => {
   currentModel = null
