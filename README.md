@@ -1,6 +1,6 @@
 # CSAF 2.0 Visualizer
 
-[![Deploy to GitHub Pages](https://github.com/ctron/csaf-visualizer/actions/workflows/deploy.yaml/badge.svg)](https://github.com/ctron/csaf-visualizer/actions/workflows/deploy.yaml)
+[![CI](https://github.com/ctron/csaf-visualizer/actions/workflows/deploy.yaml/badge.svg)](https://github.com/ctron/csaf-visualizer/actions/workflows/deploy.yaml)
 [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-brightgreen)](https://ctron.github.io/csaf-visualizer/)
 [![License](https://img.shields.io/github/license/ctron/csaf-visualizer)](LICENSE)
 
