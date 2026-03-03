@@ -50,6 +50,40 @@ function relColor(cat: string): string {
   return RELATIONSHIP_COLORS[cat] ?? '#adb5bd'
 }
 
+const PRODUCT_THRESHOLD = 256
+
+function renderLargeDocumentWarning(container: HTMLElement, productCount: number, onOverride: () => void): void {
+  const div = document.createElement('div')
+  div.className = 'p-4 d-flex flex-column align-items-center justify-content-center gap-3 text-center'
+  div.style.minHeight = '200px'
+
+  const icon = document.createElement('div')
+  icon.className = 'fs-1'
+  icon.textContent = '\u26a0\ufe0f'
+  div.appendChild(icon)
+
+  const msg = document.createElement('p')
+  msg.className = 'mb-1'
+  msg.innerHTML = `This document contains <strong>${productCount}</strong> products, which may overwhelm the browser when rendered as an interactive visualization.`
+  div.appendChild(msg)
+
+  const sub = document.createElement('p')
+  sub.className = 'text-secondary small mb-0'
+  sub.textContent = 'Rendering large graphs can cause the page to become unresponsive or crash.'
+  div.appendChild(sub)
+
+  const btn = document.createElement('button')
+  btn.className = 'btn btn-outline-warning mt-2'
+  btn.textContent = 'Render anyway'
+  btn.addEventListener('click', () => {
+    container.innerHTML = ''
+    onOverride()
+  })
+  div.appendChild(btn)
+
+  container.appendChild(div)
+}
+
 export function renderRelationships(container: HTMLElement, model: ParsedModel): void {
   container.innerHTML = ''
 
@@ -58,6 +92,17 @@ export function renderRelationships(container: HTMLElement, model: ParsedModel):
     container.innerHTML = '<div class="p-4 text-secondary">No relationships defined in this document.</div>'
     return
   }
+
+  if (model.allProducts.size > PRODUCT_THRESHOLD) {
+    renderLargeDocumentWarning(container, model.allProducts.size, () => renderRelationshipsContent(container, model))
+    return
+  }
+
+  renderRelationshipsContent(container, model)
+}
+
+function renderRelationshipsContent(container: HTMLElement, model: ParsedModel): void {
+  const rels = model.doc.product_tree?.relationships!
 
   const legend = buildLegend()
   container.appendChild(legend)
