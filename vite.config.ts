@@ -7,6 +7,9 @@ export default defineConfig({
   define: {
     __GIT_SHA__: JSON.stringify(gitSha),
   },
+  build: {
+    chunkSizeWarningLimit: 600,
+  },
   server: {
     fs: {
       strict: false,
