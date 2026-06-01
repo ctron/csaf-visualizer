@@ -1,7 +1,7 @@
 import { Popover, Tooltip } from 'bootstrap'
 import { fromVector } from 'ae-cvss-calculator'
 import cweNames from '../cwe-names.json'
-import type { ParsedModel, Vulnerability, ProductStatus } from '../types'
+import type { ParsedModel, Vulnerability, ProductStatus, Threat } from '../types'
 import { severityColor } from '../parser'
 import { navigateToRelTree } from '../main'
 import { renderMarkdown, renderMarkdownInline } from '../markdown'
@@ -87,6 +87,10 @@ export function renderVulnerabilities(container: HTMLElement, model: ParsedModel
   container.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
     new Tooltip(el)
   })
+
+  container.querySelectorAll<HTMLElement>('.threat-popover[data-bs-content]').forEach(el => {
+    new Popover(el, { html: true })
+  })
 }
 
 /** Looks up the human-readable name for a CWE ID like "CWE-79". */
@@ -108,6 +112,57 @@ function renderStateSummaryBadges(v: Vulnerability): string {
     .filter(s => (v.product_status?.[s.key]?.length ?? 0) > 0)
     .map(s => `<span class="badge ${s.cls} fw-normal">${v.product_status![s.key]!.length} ${s.label}</span>`)
     .join('')
+}
+
+function renderThreatSummaryBadges(v: Vulnerability): string {
+  const grouped = new Map<string, string[]>()
+  for (const t of v.threats ?? []) {
+    const label = threatCategoryLabel[t.category] ?? t.category.replace(/_/g, ' ')
+    if (!grouped.has(label)) grouped.set(label, [])
+    if (t.details) grouped.get(label)!.push(t.details)
+  }
+  return Array.from(grouped.entries())
+    .map(([label, details]) => {
+      const tip = details.join(' — ')
+      const content = renderMarkdownInline(tip)
+      return `<span class="badge text-bg-secondary threat-popover"${tip ? ` data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-content="${escHtml(content)}"` : ''}>${escHtml(label)}</span>`
+    })
+    .join('')
+}
+
+
+const threatCategoryLabel: Record<string, string> = {
+  exploit_status: 'Exploit Status',
+  impact: 'Impact',
+  target_set: 'Target Set',
+}
+
+/** Renders the threats subsection within a vulnerability card. */
+function renderThreatsSection(
+  threats: Threat[],
+  vulnId: string,
+  renderBadges: (pids: string[], style: string, showAll: boolean, expandId: string) => string
+): string {
+  return `
+    <div class="mt-2 row g-2">
+      ${threats.map((t, ti) => {
+        const label = threatCategoryLabel[t.category] ?? t.category.replace(/_/g, ' ')
+        const threatPids = t.product_ids ?? []
+        const threatExpandId = `${vulnId}-threat-${ti}`
+        return `
+          <div class="col-12 col-md-6 col-xl-4"><div class="card border-secondary-subtle h-100">
+            <div class="card-header bg-secondary-subtle text-secondary-emphasis border-secondary-subtle d-flex align-items-center justify-content-between gap-2">
+              <span class="fw-semibold">${escHtml(label)}</span>
+              ${t.date ? `<span class="small text-body-secondary">${escHtml(t.date)}</span>` : ''}
+            </div>
+            <div class="card-body">
+              ${t.details ? `<div class="mb-1">${renderMarkdownInline(t.details)}</div>` : ''}
+              ${threatPids.length > 0 ? `<div id="${threatExpandId}">${renderBadges(threatPids, 'bg-secondary', false, threatExpandId)}</div>` : ''}
+            </div>
+          </div></div>
+        `
+      }).join('')}
+    </div>`
 }
 
 function renderVulnsSection(
@@ -141,7 +196,7 @@ function renderVulnsSection(
       return badges + more
     }
 
-    const hasDetails = affected.length > 0 || fixed.length > 0 || (v.remediations?.length ?? 0) > 0
+    const hasDetails = affected.length > 0 || fixed.length > 0 || (v.remediations?.length ?? 0) > 0 || (v.threats?.length ?? 0) > 0
 
     return `
       <div class="card border-secondary mb-2">
@@ -152,6 +207,7 @@ function renderVulnsSection(
             ${v.cve ? `<code>${escHtml(v.cve)}</code>` : ''}
             ${v.cwe ? `<span class="badge bg-secondary"${cweName(v.cwe.id) ? ` data-bs-toggle="tooltip" data-bs-title="${escHtml(cweName(v.cwe.id)!)}"` : ''}>${escHtml(v.cwe.id)}</span>` : ''}
             ${bestScore ? `<span class="badge bg-${severityColor(bestScore.severity)} cvss-popover" data-cvss-vector="${escHtml(bestScore.vector)}" data-cvss-severity="${escHtml(bestScore.severity)}" data-cvss-score="${bestScore.score}">${bestScore.severity} ${bestScore.score.toFixed(1)}</span>` : ''}
+            ${renderThreatSummaryBadges(v)}
             <span class="flex-grow-1 fw-semibold small vuln-title">${renderMarkdownInline(v.title ?? v.cve ?? 'Unnamed')}</span>
             ${hasDetails ? `<span class="collapsed-only gap-1 flex-wrap">${renderStateSummaryBadges(v)}</span>` : ''}
           </div>
@@ -166,6 +222,7 @@ function renderVulnsSection(
             <span class="text-secondary me-1">Fixed:</span>
             ${renderBadges(fixed, 'bg-success-subtle text-success-emphasis border border-success-subtle', false, `${vulnId}-fixed`)}
           </div>` : ''}
+          ${v.threats?.length ? renderThreatsSection(v.threats, vulnId, renderBadges) : ''}
           ${v.remediations?.length ? `
           <div class="mt-2 row g-2">
             ${v.remediations.map((r, ri) => {
