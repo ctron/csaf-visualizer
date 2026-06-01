@@ -11,14 +11,14 @@
   },
   "dependencies": {
     "ae-cvss-calculator": "^1.0.12",
-    "bootstrap": "^5.3.3",
+    "bootstrap": "^5.3.8",
     "d3": "^7.9.0",
     "marked": "^18.0.4"
   },
   "devDependencies": {
     "@types/bootstrap": "^5.2.10",
     "@types/d3": "^7.4.3",
-    "typescript": "^5.4.5",
-    "vite": "^5.2.11"
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
   }
 }
