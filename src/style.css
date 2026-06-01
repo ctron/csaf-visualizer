@@ -129,6 +129,25 @@ code {
   stroke: #adb5bd !important;
 }
 
+.collapse-toggle {
+  font-size: 0.65em;
+  transition: transform 0.2s;
+  display: inline-block;
+  transform: rotate(90deg);
+}
+
+[data-bs-toggle="collapse"].collapsed .collapse-toggle {
+  transform: rotate(0deg);
+}
+
+[data-bs-toggle="collapse"] .collapsed-only {
+  display: none !important;
+}
+
+[data-bs-toggle="collapse"].collapsed .collapsed-only {
+  display: inline-flex !important;
+}
+
 @keyframes highlight-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.2; }

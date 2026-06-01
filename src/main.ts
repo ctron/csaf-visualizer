@@ -1,5 +1,6 @@
 import 'bootstrap/dist/css/bootstrap.min.css'
-import { Offcanvas } from 'bootstrap'
+import { Collapse, Offcanvas } from 'bootstrap'
+void Collapse
 import './style.css'
 
 import type { FullProductName, ParsedModel, ProductVulnEntry } from './types'

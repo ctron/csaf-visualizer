@@ -357,6 +357,21 @@ function countBranchProducts(branches: import('../types').Branch[]): number {
   return count
 }
 
+function renderStateSummaryBadges(v: Vulnerability): string {
+  const statuses: { key: keyof ProductStatus; label: string; cls: string }[] = [
+    { key: 'known_affected', label: 'affected', cls: 'text-bg-danger' },
+    { key: 'fixed', label: 'fixed', cls: 'text-bg-success' },
+    { key: 'known_not_affected', label: 'not affected', cls: 'text-bg-secondary' },
+    { key: 'under_investigation', label: 'investigating', cls: 'text-bg-warning' },
+    { key: 'first_fixed', label: 'first fixed', cls: 'text-bg-info' },
+    { key: 'recommended', label: 'recommended', cls: 'text-bg-primary' },
+  ]
+  return statuses
+    .filter(s => (v.product_status?.[s.key]?.length ?? 0) > 0)
+    .map(s => `<span class="badge ${s.cls} fw-normal">${v.product_status![s.key]!.length} ${s.label}</span>`)
+    .join('')
+}
+
 function renderVulnsSection(
   vulns: Vulnerability[],
   allProducts: Map<string, import('../types').FullProductName>
@@ -388,15 +403,21 @@ function renderVulnsSection(
       return badges + more
     }
 
+    const hasDetails = affected.length > 0 || fixed.length > 0 || (v.remediations?.length ?? 0) > 0
+
     return `
       <div class="card border-secondary mb-2">
         <div class="card-body py-2 px-3">
-          <div class="d-flex align-items-start gap-2 flex-wrap">
+          <div class="d-flex align-items-start gap-2 flex-wrap user-select-none collapsed"
+               role="button" ${hasDetails ? `data-bs-toggle="collapse" data-bs-target="#${vulnId}-detail"` : ''}>
+            <span class="collapse-toggle text-secondary">&#9654;</span>
             ${v.cve ? `<code class="text-warning">${escHtml(v.cve)}</code>` : ''}
             ${v.cwe ? `<span class="badge bg-secondary">${escHtml(v.cwe.id)}</span>` : ''}
             ${bestScore ? `<span class="badge bg-${severityColor(bestScore.severity)}">${bestScore.severity} ${bestScore.score.toFixed(1)}</span>` : ''}
             <span class="flex-grow-1 fw-semibold small">${escHtml(v.title ?? v.cve ?? 'Unnamed')}</span>
+            ${hasDetails ? `<span class="collapsed-only gap-1 flex-wrap">${renderStateSummaryBadges(v)}</span>` : ''}
           </div>
+          ${hasDetails ? `<div class="collapse" id="${vulnId}-detail">` : ''}
           ${affected.length > 0 ? `
           <div class="mt-2 small" id="${vulnId}-affected">
             <span class="text-secondary me-1">Affected:</span>
@@ -409,12 +430,9 @@ function renderVulnsSection(
           </div>` : ''}
           ${v.remediations?.length ? `
           <div class="mt-2 row g-2">
-            ${v.remediations.map(r => {
+            ${v.remediations.map((r, ri) => {
               const remPids = r.product_ids ?? []
-              const remBadges = remPids.map(pid => {
-                const p = allProducts.get(pid)
-                return `<span class="badge bg-secondary me-1 mb-1 cursor-pointer product-link" style="white-space:normal;text-align:left" data-rel-product-id="${escHtml(pid)}" data-pid="${escHtml(pid)}">${formatProductName(p?.name ?? pid)}</span>`
-              }).join('')
+              const remExpandId = `${vulnId}-rem-${ri}`
               return `
                 <div class="col-12 col-md-6 col-xl-4"><div class="card border-info-subtle small h-100">
                   <div class="card-header bg-info-subtle text-info-emphasis border-info-subtle py-1 px-2 d-flex align-items-center justify-content-between gap-2">
@@ -423,12 +441,13 @@ function renderVulnsSection(
                   </div>
                   <div class="card-body py-1 px-2">
                     ${r.details ? `<p class="text-secondary mb-1">${escHtml(r.details)}</p>` : ''}
-                    ${remBadges ? `<div>${remBadges}</div>` : ''}
+                    ${remPids.length > 0 ? `<div id="${remExpandId}">${renderBadges(remPids, 'bg-secondary', false, remExpandId)}</div>` : ''}
                   </div>
                 </div></div>
               `
             }).join('')}
           </div>` : ''}
+          ${hasDetails ? `</div>` : ''}
         </div>
       </div>
     `
