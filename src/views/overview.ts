@@ -1,6 +1,7 @@
 import * as d3 from 'd3'
 import type { ParsedModel, ProductStatus } from '../types'
 import { showProductDetail } from '../main'
+import { renderMarkdown } from '../markdown'
 
 const STATUS_CONFIG: { key: keyof ProductStatus; label: string; color: string }[] = [
   { key: 'known_affected',     label: 'Known Affected',     color: '#dc3545' },
@@ -328,7 +329,7 @@ function renderNotesSection(notes: import('../types').Note[]): string {
   const items = notes.map(n => `
     <div class="mb-2">
       <div class="fw-semibold text-secondary">${escHtml(n.title ?? n.category)}</div>
-      <div>${escHtml(n.text)}</div>
+      <div class="vuln-remediation-details">${renderMarkdown(n.text)}</div>
     </div>
   `).join('<hr class="border-secondary my-2">')
 
