@@ -44,6 +44,9 @@ The target URL is URL-encoded and appended directly to the proxy prefix, so the 
 * https://ctron.github.io/csaf-visualizer/?url=https://msrc.microsoft.com/csaf/vex/2025/msrc_cve-2025-40005.json&cors-proxy=https://corsproxy.io/?url=
 * https://ctron.github.io/csaf-visualizer/?url=https://cert-portal.siemens.com/productcert/csaf/ssa-979775.json&cors-proxy=https://corsproxy.io/?url=
 * https://ctron.github.io/csaf-visualizer/?url=https://www.se.com/.well-known/csaf/2025/sevd-2025-042-02.json&cors-proxy=https://corsproxy.io/?url=
+* https://ctron.github.io/csaf-visualizer/?url=https://psirt.abb.com/csaf/2026/7paa013309.json&cors-proxy=https://corsproxy.io/?url=
+* https://ctron.github.io/csaf-visualizer/?url=https://www.sick.com/.well-known/csaf/white/2026/sca-2026-0007.json&cors-proxy=https://corsproxy.io/?url=
+* https://ctron.github.io/csaf-visualizer/?url=https://ftp.suse.com/pub/projects/security/csaf-vex/cve-2026-9997.json&cors-proxy=https://corsproxy.io/?url=
 
 ## Development
 
