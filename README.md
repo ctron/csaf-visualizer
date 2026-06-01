@@ -62,7 +62,7 @@ Output is written to `dist/`.
 
 ## Deployment
 
-The app is automatically deployed to GitHub Pages on every push to `main` via GitHub Actions. Enable Pages in your repository settings under **Settings → Pages → Source → GitHub Actions**.
+The app is automatically deployed to [GitHub Pages](https://ctron.github.io/csaf-visualizer/) on every push to `main` via GitHub Actions. Enable Pages in your repository settings under **Settings → Pages → Source → GitHub Actions**.
 
 ## Tech Stack
 
