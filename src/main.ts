@@ -9,6 +9,8 @@ import { renderOverview } from './views/overview'
 import { renderProductTree } from './views/product-tree'
 import { renderRelationships } from './views/relationships'
 import { renderRelationshipTree, highlightProductInRelTree } from './views/relationship-tree'
+import { renderDocumentDetails } from './views/document-details'
+import { renderVulnerabilities } from './views/vulnerabilities'
 import { initTheme, toggleTheme } from './theme'
 
 let currentModel: ParsedModel | null = null
@@ -31,6 +33,8 @@ const tabOverview = document.getElementById('tab-overview') as HTMLDivElement
 const tabProductTree = document.getElementById('tab-product-tree') as HTMLDivElement
 const tabRelationships = document.getElementById('tab-relationships') as HTMLDivElement
 const tabRelationshipTree = document.getElementById('tab-relationship-tree') as HTMLDivElement
+const tabDocumentDetails = document.getElementById('tab-document-details') as HTMLDivElement
+const tabVulnerabilities = document.getElementById('tab-vulnerabilities') as HTMLDivElement
 
 const tabButtons = document.querySelectorAll<HTMLButtonElement>('[data-tab]')
 
@@ -142,6 +146,8 @@ clearBtn.addEventListener('click', () => {
   tabProductTree.innerHTML = ''
   tabRelationships.innerHTML = ''
   tabRelationshipTree.innerHTML = ''
+  tabDocumentDetails.innerHTML = ''
+  tabVulnerabilities.innerHTML = ''
 })
 
 tabButtons.forEach(btn => {
@@ -175,6 +181,8 @@ function renderCurrentTab(): void {
   tabProductTree.classList.remove('active')
   tabRelationships.classList.remove('active')
   tabRelationshipTree.classList.remove('active')
+  tabDocumentDetails.classList.remove('active')
+  tabVulnerabilities.classList.remove('active')
 
   if (activeTab === 'overview') {
     tabOverview.classList.add('active')
@@ -199,6 +207,18 @@ function renderCurrentTab(): void {
     if (!renderedTabs.has('relationship-tree')) {
       renderRelationshipTree(tabRelationshipTree, currentModel)
       renderedTabs.add('relationship-tree')
+    }
+  } else if (activeTab === 'document-details') {
+    tabDocumentDetails.classList.add('active')
+    if (!renderedTabs.has('document-details')) {
+      renderDocumentDetails(tabDocumentDetails, currentModel)
+      renderedTabs.add('document-details')
+    }
+  } else if (activeTab === 'vulnerabilities') {
+    tabVulnerabilities.classList.add('active')
+    if (!renderedTabs.has('vulnerabilities')) {
+      renderVulnerabilities(tabVulnerabilities, currentModel)
+      renderedTabs.add('vulnerabilities')
     }
   }
 }

@@ -57,11 +57,15 @@ html, body {
   height: 100%;
 }
 
-#tab-overview {
+#tab-overview,
+#tab-document-details,
+#tab-vulnerabilities {
   display: none;
 }
 
-#tab-overview.active {
+#tab-overview.active,
+#tab-document-details.active,
+#tab-vulnerabilities.active {
   display: block;
   height: 100%;
   overflow-y: auto;
@@ -136,15 +140,15 @@ code {
   transform: rotate(90deg);
 }
 
-[data-bs-toggle="collapse"].collapsed .collapse-toggle {
+.collapse-toggle.collapsed {
   transform: rotate(0deg);
 }
 
-[data-bs-toggle="collapse"] .collapsed-only {
+.collapsed-only {
   display: none !important;
 }
 
-[data-bs-toggle="collapse"].collapsed .collapsed-only {
+.collapse-toggle.collapsed ~ .collapsed-only {
   display: inline-flex !important;
 }
 

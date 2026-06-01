@@ -1,7 +1,6 @@
 import * as d3 from 'd3'
-import type { ParsedModel, Vulnerability, ProductStatus } from '../types'
-import { severityColor } from '../parser'
-import { showProductDetail, navigateToRelTree } from '../main'
+import type { ParsedModel, ProductStatus } from '../types'
+import { showProductDetail } from '../main'
 
 const STATUS_CONFIG: { key: keyof ProductStatus; label: string; color: string }[] = [
   { key: 'known_affected',     label: 'Known Affected',     color: '#dc3545' },
@@ -72,7 +71,7 @@ export function renderOverview(container: HTMLElement, model: ParsedModel): void
           </div>
           <div class="card-body">
             <h5 class="card-title">${escHtml(d.title)}</h5>
-            <div class="row g-2 small">
+            <div class="row g-2">
               <div class="col-sm-6 col-lg-3">
                 <span class="text-secondary">Tracking ID</span><br>
                 <code>${escHtml(d.tracking.id)}</code>
@@ -119,7 +118,7 @@ export function renderOverview(container: HTMLElement, model: ParsedModel): void
           <div class="card-body">
             <div class="d-flex align-items-baseline gap-2 mb-3">
               <span class="display-5 fw-bold">${vulns.length}</span>
-              <span class="text-secondary small">total</span>
+              <span class="text-secondary">total</span>
             </div>
             <div class="d-flex flex-column gap-1">
               ${renderSeverityBar('Critical', severityCounts.CRITICAL, vulns.length, 'danger')}
@@ -138,9 +137,9 @@ export function renderOverview(container: HTMLElement, model: ParsedModel): void
           <div class="card-body">
             <div class="d-flex align-items-baseline gap-2 mb-3">
               <span class="display-5 fw-bold">${allProducts.size}</span>
-              <span class="text-secondary small">total</span>
+              <span class="text-secondary">total</span>
             </div>
-            <div class="d-flex flex-column gap-2 small">
+            <div class="d-flex flex-column gap-2">
               ${branchProducts > 0 ? `
               <div class="d-flex justify-content-between">
                 <span class="text-secondary">From branches</span>
@@ -174,8 +173,6 @@ export function renderOverview(container: HTMLElement, model: ParsedModel): void
         </div>
       </div>
 
-      ${vulns.length > 0 ? renderVulnsSection(vulns, allProducts) : ''}
-
       ${doc.product_tree?.product_groups?.length ? renderGroupsSection(doc.product_tree.product_groups, allProducts) : ''}
 
       ${d.notes?.length ? renderNotesSection(d.notes) : ''}
@@ -190,61 +187,6 @@ export function renderOverview(container: HTMLElement, model: ParsedModel): void
     })
   })
 
-  container.querySelectorAll<HTMLElement>('[data-rel-product-id]').forEach(el => {
-    el.addEventListener('click', () => {
-      navigateToRelTree(el.dataset.relProductId!)
-    })
-    el.addEventListener('mouseenter', () => {
-      const pid = el.dataset.pid!
-      container.querySelectorAll<HTMLElement>(`[data-pid="${CSS.escape(pid)}"]`).forEach(b => {
-        if (b !== el) b.classList.add('pid-highlight')
-      })
-    })
-    el.addEventListener('mouseleave', () => {
-      container.querySelectorAll<HTMLElement>('.pid-highlight').forEach(b => b.classList.remove('pid-highlight'))
-    })
-  })
-
-  container.querySelectorAll<HTMLButtonElement>('button.expand-more').forEach(btn => {
-    const pids: string[] = JSON.parse(btn.dataset.pids!)
-    const style = btn.dataset.style!
-    const expandId = btn.dataset.expandId!
-    const extra = pids.slice(3)
-    let expanded = false
-
-    const extraBadges = extra.map(pid => {
-      const p = allProducts.get(pid)
-      const name = p?.name ?? pid
-      const badge = document.createElement('span')
-      badge.className = `badge ${style} me-1 mb-1 cursor-pointer product-link`
-      badge.style.whiteSpace = 'normal'
-      badge.style.textAlign = 'left'
-      badge.dataset.productId = pid
-      badge.dataset.pid = pid
-      badge.innerHTML = formatProductName(name)
-      badge.addEventListener('click', () => { navigateToRelTree(pid) })
-      badge.addEventListener('mouseenter', () => {
-        container.querySelectorAll<HTMLElement>(`[data-pid="${CSS.escape(pid)}"]`).forEach(b => {
-          if (b !== badge) b.classList.add('pid-highlight')
-        })
-      })
-      badge.addEventListener('mouseleave', () => {
-        container.querySelectorAll<HTMLElement>('.pid-highlight').forEach(b => b.classList.remove('pid-highlight'))
-      })
-      badge.style.display = 'none'
-      return badge
-    })
-
-    const targetContainer = document.getElementById(expandId)!
-    extraBadges.forEach(b => targetContainer.insertBefore(b, btn))
-
-    btn.addEventListener('click', () => {
-      expanded = !expanded
-      extraBadges.forEach(b => { b.style.display = expanded ? '' : 'none' })
-      btn.textContent = expanded ? `− show less` : `+${extra.length} more`
-    })
-  })
-
   renderStatusDonut(
     document.getElementById('status-donut-card')!,
     statusCounts,
@@ -256,7 +198,7 @@ function renderSeverityBar(label: string, count: number, total: number, color: s
   const pct = total > 0 ? Math.round((count / total) * 100) : 0
   return `
     <div>
-      <div class="d-flex justify-content-between small mb-1">
+      <div class="d-flex justify-content-between mb-1">
         <span class="text-secondary">${label}</span>
         <span class="fw-semibold">${count}</span>
       </div>
@@ -278,7 +220,7 @@ function renderStatusDonut(
   const total = data.reduce((s, d) => s + d.count, 0)
 
   if (total === 0) {
-    cardEl.innerHTML = '<span class="text-secondary small">No product status data</span>'
+    cardEl.innerHTML = '<span class="text-secondary">No product status data</span>'
     return
   }
 
@@ -357,111 +299,6 @@ function countBranchProducts(branches: import('../types').Branch[]): number {
   return count
 }
 
-function renderStateSummaryBadges(v: Vulnerability): string {
-  const statuses: { key: keyof ProductStatus; label: string; cls: string }[] = [
-    { key: 'known_affected', label: 'affected', cls: 'text-bg-danger' },
-    { key: 'fixed', label: 'fixed', cls: 'text-bg-success' },
-    { key: 'known_not_affected', label: 'not affected', cls: 'text-bg-secondary' },
-    { key: 'under_investigation', label: 'investigating', cls: 'text-bg-warning' },
-    { key: 'first_fixed', label: 'first fixed', cls: 'text-bg-info' },
-    { key: 'recommended', label: 'recommended', cls: 'text-bg-primary' },
-  ]
-  return statuses
-    .filter(s => (v.product_status?.[s.key]?.length ?? 0) > 0)
-    .map(s => `<span class="badge ${s.cls} fw-normal">${v.product_status![s.key]!.length} ${s.label}</span>`)
-    .join('')
-}
-
-function renderVulnsSection(
-  vulns: Vulnerability[],
-  allProducts: Map<string, import('../types').FullProductName>
-): string {
-  const rows = vulns.map(v => {
-    const scores = v.scores ?? []
-    const bestScore = scores.reduce<{ score: number; severity: string; vector: string } | null>((acc, s) => {
-      const cv3 = s.cvss_v3
-      if (cv3 && (acc === null || cv3.baseScore > acc.score)) {
-        return { score: cv3.baseScore, severity: cv3.baseSeverity, vector: cv3.vectorString }
-      }
-      return acc
-    }, null)
-
-    const affected = v.product_status?.known_affected ?? []
-    const fixed = v.product_status?.fixed ?? []
-    const vulnId = `vuln-${Math.random().toString(36).slice(2)}`
-
-    const renderBadges = (pids: string[], style: string, showAll: boolean, expandId: string) => {
-      const initial = showAll ? pids : pids.slice(0, 3)
-      const badges = initial.map(pid => {
-        const p = allProducts.get(pid)
-        const name = p?.name ?? pid
-        return `<span class="badge ${style} me-1 mb-1 cursor-pointer product-link" style="white-space:normal;text-align:left" data-rel-product-id="${escHtml(pid)}" data-pid="${escHtml(pid)}">${formatProductName(name)}</span>`
-      }).join('')
-      const more = !showAll && pids.length > 3
-        ? `<button class="btn btn-link btn-sm p-0 text-secondary expand-more" data-expand-id="${expandId}" data-pids='${JSON.stringify(pids)}' data-style="${style}">+${pids.length - 3} more</button>`
-        : ''
-      return badges + more
-    }
-
-    const hasDetails = affected.length > 0 || fixed.length > 0 || (v.remediations?.length ?? 0) > 0
-
-    return `
-      <div class="card border-secondary mb-2">
-        <div class="card-body py-2 px-3">
-          <div class="d-flex align-items-start gap-2 flex-wrap user-select-none collapsed"
-               role="button" ${hasDetails ? `data-bs-toggle="collapse" data-bs-target="#${vulnId}-detail"` : ''}>
-            <span class="collapse-toggle text-secondary">&#9654;</span>
-            ${v.cve ? `<code class="text-warning">${escHtml(v.cve)}</code>` : ''}
-            ${v.cwe ? `<span class="badge bg-secondary">${escHtml(v.cwe.id)}</span>` : ''}
-            ${bestScore ? `<span class="badge bg-${severityColor(bestScore.severity)}">${bestScore.severity} ${bestScore.score.toFixed(1)}</span>` : ''}
-            <span class="flex-grow-1 fw-semibold small">${escHtml(v.title ?? v.cve ?? 'Unnamed')}</span>
-            ${hasDetails ? `<span class="collapsed-only gap-1 flex-wrap">${renderStateSummaryBadges(v)}</span>` : ''}
-          </div>
-          ${hasDetails ? `<div class="collapse" id="${vulnId}-detail">` : ''}
-          ${affected.length > 0 ? `
-          <div class="mt-2 small" id="${vulnId}-affected">
-            <span class="text-secondary me-1">Affected:</span>
-            ${renderBadges(affected, 'bg-danger-subtle text-danger-emphasis border border-danger-subtle', false, `${vulnId}-affected`)}
-          </div>` : ''}
-          ${fixed.length > 0 ? `
-          <div class="mt-1 small" id="${vulnId}-fixed">
-            <span class="text-secondary me-1">Fixed:</span>
-            ${renderBadges(fixed, 'bg-success-subtle text-success-emphasis border border-success-subtle', false, `${vulnId}-fixed`)}
-          </div>` : ''}
-          ${v.remediations?.length ? `
-          <div class="mt-2 row g-2">
-            ${v.remediations.map((r, ri) => {
-              const remPids = r.product_ids ?? []
-              const remExpandId = `${vulnId}-rem-${ri}`
-              return `
-                <div class="col-12 col-md-6 col-xl-4"><div class="card border-info-subtle small h-100">
-                  <div class="card-header bg-info-subtle text-info-emphasis border-info-subtle py-1 px-2 d-flex align-items-center justify-content-between gap-2">
-                    <span class="fw-semibold">${escHtml(r.category.replace(/_/g, ' '))}</span>
-                    ${r.url ? `<a href="${escHtml(r.url)}" target="_blank" rel="noopener" class="small text-truncate">${escHtml(r.url)}</a>` : ''}
-                  </div>
-                  <div class="card-body py-1 px-2">
-                    ${r.details ? `<p class="text-secondary mb-1">${escHtml(r.details)}</p>` : ''}
-                    ${remPids.length > 0 ? `<div id="${remExpandId}">${renderBadges(remPids, 'bg-secondary', false, remExpandId)}</div>` : ''}
-                  </div>
-                </div></div>
-              `
-            }).join('')}
-          </div>` : ''}
-          ${hasDetails ? `</div>` : ''}
-        </div>
-      </div>
-    `
-  }).join('')
-
-  return `
-    <div class="col-12">
-      <div class="card border-secondary">
-        <div class="card-header fw-semibold">Vulnerabilities</div>
-        <div class="card-body p-2">${rows}</div>
-      </div>
-    </div>
-  `
-}
 
 function renderGroupsSection(
   groups: import('../types').ProductGroup[],
@@ -469,7 +306,7 @@ function renderGroupsSection(
 ): string {
   const rows = groups.map(g => `
     <div class="mb-2">
-      <div class="small fw-semibold text-secondary mb-1">${escHtml(g.group_id)}${g.summary ? ` — ${escHtml(g.summary)}` : ''}</div>
+      <div class="fw-semibold text-secondary mb-1">${escHtml(g.group_id)}${g.summary ? ` — ${escHtml(g.summary)}` : ''}</div>
       <div>${g.product_ids.map(pid => {
         const p = allProducts.get(pid)
         return `<span class="badge bg-secondary me-1 cursor-pointer product-link" data-product-id="${escHtml(pid)}">${escHtml(p?.name ?? pid)}</span>`
@@ -490,8 +327,8 @@ function renderGroupsSection(
 function renderNotesSection(notes: import('../types').Note[]): string {
   const items = notes.map(n => `
     <div class="mb-2">
-      <div class="small fw-semibold text-secondary">${escHtml(n.title ?? n.category)}</div>
-      <div class="small">${escHtml(n.text)}</div>
+      <div class="fw-semibold text-secondary">${escHtml(n.title ?? n.category)}</div>
+      <div>${escHtml(n.text)}</div>
     </div>
   `).join('<hr class="border-secondary my-2">')
 
@@ -505,10 +342,6 @@ function renderNotesSection(notes: import('../types').Note[]): string {
   `
 }
 
-function formatProductName(name: string): string {
-  return escHtml(name)
-}
-
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
@@ -520,3 +353,4 @@ function formatDate(iso: string): string {
     return iso
   }
 }
+

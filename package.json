@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "ae-cvss-calculator": "^1.0.12",
     "bootstrap": "^5.3.3",
     "d3": "^7.9.0"
   },
