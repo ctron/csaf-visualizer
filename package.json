@@ -12,7 +12,8 @@
   "dependencies": {
     "ae-cvss-calculator": "^1.0.12",
     "bootstrap": "^5.3.3",
-    "d3": "^7.9.0"
+    "d3": "^7.9.0",
+    "marked": "^18.0.4"
   },
   "devDependencies": {
     "@types/bootstrap": "^5.2.10",

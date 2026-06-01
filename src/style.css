@@ -140,7 +140,11 @@ code {
   transform: rotate(90deg);
 }
 
-.collapse-toggle.collapsed {
+.vuln-header-collapsible {
+  cursor: pointer;
+}
+
+.vuln-header.collapsed .collapse-toggle {
   transform: rotate(0deg);
 }
 
@@ -148,8 +152,24 @@ code {
   display: none !important;
 }
 
-.collapse-toggle.collapsed ~ .collapsed-only {
+.vuln-header.collapsed .collapsed-only {
   display: inline-flex !important;
+}
+
+.vuln-title p,
+.vuln-title code {
+  margin: 0;
+}
+
+.vuln-remediation-details > :last-child {
+  margin-bottom: 0;
+}
+
+.vuln-remediation-details pre {
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.375rem;
+  padding: 0.5rem;
 }
 
 @keyframes highlight-pulse {

@@ -4,6 +4,12 @@ import cweNames from '../cwe-names.json'
 import type { ParsedModel, Vulnerability, ProductStatus } from '../types'
 import { severityColor } from '../parser'
 import { navigateToRelTree } from '../main'
+import { marked } from 'marked'
+
+/** Renders a markdown string as inline HTML (no wrapping <p> tag). */
+function renderMd(text: string): string {
+  return marked.parseInline(text) as string
+}
 
 /** Renders the vulnerabilities tab with collapsible vulnerability cards. */
 export function renderVulnerabilities(container: HTMLElement, model: ParsedModel): void {
@@ -145,13 +151,13 @@ function renderVulnsSection(
     return `
       <div class="card border-secondary mb-2">
         <div class="card-body py-2 px-3">
-          <div class="d-flex align-items-start gap-2 flex-wrap">
-            <span class="collapse-toggle text-secondary user-select-none collapsed"
-                  role="button" ${hasDetails ? `data-bs-toggle="collapse" data-bs-target="#${vulnId}-detail"` : ''}>&#9654;</span>
+          <div class="d-flex align-items-start gap-2 flex-wrap vuln-header${hasDetails ? ' vuln-header-collapsible collapsed' : ''}"
+                 ${hasDetails ? `role="button" data-bs-toggle="collapse" data-bs-target="#${vulnId}-detail"` : ''}>
+            <span class="collapse-toggle text-secondary user-select-none">&#9654;</span>
             ${v.cve ? `<code>${escHtml(v.cve)}</code>` : ''}
             ${v.cwe ? `<span class="badge bg-secondary"${cweName(v.cwe.id) ? ` data-bs-toggle="tooltip" data-bs-title="${escHtml(cweName(v.cwe.id)!)}"` : ''}>${escHtml(v.cwe.id)}</span>` : ''}
             ${bestScore ? `<span class="badge bg-${severityColor(bestScore.severity)} cvss-popover" data-cvss-vector="${escHtml(bestScore.vector)}" data-cvss-severity="${escHtml(bestScore.severity)}" data-cvss-score="${bestScore.score}">${bestScore.severity} ${bestScore.score.toFixed(1)}</span>` : ''}
-            <span class="flex-grow-1 fw-semibold small">${escHtml(v.title ?? v.cve ?? 'Unnamed')}</span>
+            <span class="flex-grow-1 fw-semibold small vuln-title">${renderMd(v.title ?? v.cve ?? 'Unnamed')}</span>
             ${hasDetails ? `<span class="collapsed-only gap-1 flex-wrap">${renderStateSummaryBadges(v)}</span>` : ''}
           </div>
           ${hasDetails ? `<div class="collapse" id="${vulnId}-detail">` : ''}
@@ -171,13 +177,13 @@ function renderVulnsSection(
               const remPids = r.product_ids ?? []
               const remExpandId = `${vulnId}-rem-${ri}`
               return `
-                <div class="col-12 col-md-6 col-xl-4"><div class="card border-info-subtle small h-100">
+                <div class="col-12 col-md-6 col-xl-4"><div class="card border-info-subtle h-100">
                   <div class="card-header bg-info-subtle text-info-emphasis border-info-subtle py-1 px-2 d-flex align-items-center justify-content-between gap-2">
                     <span class="fw-semibold">${escHtml(r.category.replace(/_/g, ' '))}</span>
                     ${r.url ? `<a href="${escHtml(r.url)}" target="_blank" rel="noopener" class="small text-truncate">${escHtml(r.url)}</a>` : ''}
                   </div>
                   <div class="card-body py-1 px-2">
-                    ${r.details ? `<p class="text-secondary mb-1">${escHtml(r.details)}</p>` : ''}
+                    ${r.details ? `<div class="mb-1 vuln-remediation-details">${marked.parse(r.details) as string}</div>` : ''}
                     ${remPids.length > 0 ? `<div id="${remExpandId}">${renderBadges(remPids, 'bg-secondary', false, remExpandId)}</div>` : ''}
                   </div>
                 </div></div>
