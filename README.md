@@ -12,6 +12,8 @@ A browser-based visualizer for [CSAF 2.0](https://docs.oasis-open.org/csaf/csaf/
 - **Product Tree** — interactive zoomable/pannable tree of the CSAF product tree with branch categories, product identification helpers (PURL, CPE, hashes, etc.)
 - **Relationships** — tabular view of all product relationships
 - **Relationship Tree** — interactive zoomable/pannable tree of product relationships grouped by platform and branch ancestors
+- **Document Details** — full document-level metadata and publisher information
+- **Vulnerabilities** — dedicated vulnerability view with per-vulnerability details and badge count
 
 ### Interactions
 
@@ -64,6 +66,6 @@ The app is automatically deployed to GitHub Pages on every push to `main` via Gi
 
 ## Tech Stack
 
-- [Vite](https://vitejs.dev/) + [TypeScript](https://www.typescriptlang.org/)
+- [Vite](https://vite.dev/) + [TypeScript](https://www.typescriptlang.org/)
 - [D3.js v7](https://d3js.org/) — tree layouts, zoom, SVG rendering
 - [Bootstrap 5.3](https://getbootstrap.com/) — UI components and theming
