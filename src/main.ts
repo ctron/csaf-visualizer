@@ -74,6 +74,11 @@ function loadRaw(raw: string): void {
 
   docTitle.textContent = currentModel.doc.document.title
 
+  const vulnCount = currentModel.doc.vulnerabilities?.length ?? 0
+  const vulnBadge = document.getElementById('vuln-count-badge')!
+  vulnBadge.textContent = String(vulnCount)
+  vulnBadge.classList.toggle('d-none', vulnCount === 0)
+
   renderCurrentTab()
 }
 
@@ -141,6 +146,7 @@ clearBtn.addEventListener('click', () => {
   clearBtn.classList.add('d-none')
   docTitle.textContent = ''
   parseError.classList.add('d-none')
+  document.getElementById('vuln-count-badge')!.classList.add('d-none')
   renderedTabs.clear()
   tabOverview.innerHTML = ''
   tabProductTree.innerHTML = ''

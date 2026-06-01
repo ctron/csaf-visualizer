@@ -1,5 +1,6 @@
-import { Popover } from 'bootstrap'
+import { Popover, Tooltip } from 'bootstrap'
 import { fromVector } from 'ae-cvss-calculator'
+import cweNames from '../cwe-names.json'
 import type { ParsedModel, Vulnerability, ProductStatus } from '../types'
 import { severityColor } from '../parser'
 import { navigateToRelTree } from '../main'
@@ -81,6 +82,16 @@ export function renderVulnerabilities(container: HTMLElement, model: ParsedModel
       container: 'body',
     })
   })
+
+  container.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+    new Tooltip(el)
+  })
+}
+
+/** Looks up the human-readable name for a CWE ID like "CWE-79". */
+function cweName(id: string): string | undefined {
+  const num = id.replace(/^CWE-/i, '')
+  return (cweNames as Record<string, string>)[num]
 }
 
 function renderStateSummaryBadges(v: Vulnerability): string {
@@ -137,8 +148,8 @@ function renderVulnsSection(
           <div class="d-flex align-items-start gap-2 flex-wrap">
             <span class="collapse-toggle text-secondary user-select-none collapsed"
                   role="button" ${hasDetails ? `data-bs-toggle="collapse" data-bs-target="#${vulnId}-detail"` : ''}>&#9654;</span>
-            ${v.cve ? `<code class="text-warning">${escHtml(v.cve)}</code>` : ''}
-            ${v.cwe ? `<span class="badge bg-secondary">${escHtml(v.cwe.id)}</span>` : ''}
+            ${v.cve ? `<code>${escHtml(v.cve)}</code>` : ''}
+            ${v.cwe ? `<span class="badge bg-secondary"${cweName(v.cwe.id) ? ` data-bs-toggle="tooltip" data-bs-title="${escHtml(cweName(v.cwe.id)!)}"` : ''}>${escHtml(v.cwe.id)}</span>` : ''}
             ${bestScore ? `<span class="badge bg-${severityColor(bestScore.severity)} cvss-popover" data-cvss-vector="${escHtml(bestScore.vector)}" data-cvss-severity="${escHtml(bestScore.severity)}" data-cvss-score="${bestScore.score}">${bestScore.severity} ${bestScore.score.toFixed(1)}</span>` : ''}
             <span class="flex-grow-1 fw-semibold small">${escHtml(v.title ?? v.cve ?? 'Unnamed')}</span>
             ${hasDetails ? `<span class="collapsed-only gap-1 flex-wrap">${renderStateSummaryBadges(v)}</span>` : ''}

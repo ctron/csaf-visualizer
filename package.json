@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "update-cwe": "node scripts/update-cwe.mjs"
   },
   "dependencies": {
     "ae-cvss-calculator": "^1.0.12",
